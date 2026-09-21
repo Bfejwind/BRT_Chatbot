@@ -3,6 +3,11 @@ require("dotenv").config();
 const express = require("express");
 const axios = require("axios");
 const {
+    claimMessage,
+    completeMessage,
+    releaseMessage
+} = require("./messageDeduplication");
+const {
     getUpcomingEvents,
     getAvailableSlots,
     createBookingEvent,
@@ -87,97 +92,9 @@ const PORT = process.env.PORT || 3000;
 app.get("/", (req, res) => {
     res.send("WhatsApp bot is running");
 });
-app.get("/test-calendar", async (req, res) => {
-    try {
-        const events = await getUpcomingEvents();
 
-        const simplifiedEvents = events.map(event => ({
-            id: event.id,
-            name: event.summary,
-            start: event.start,
-            end: event.end
-        }));
-
-        console.log("Calendar events:");
-        console.log(simplifiedEvents);
-
-        res.json(simplifiedEvents);
-    }
-    catch (error) {
-        console.error(
-            "Calendar error:",
-            error.response?.data || error.message
-        );
-
-        res.status(500).json({
-            error: "Failed to read calendar"
-        });
-    }
-});
-app.get("/test-availability/:date", async (req, res) => {
-    try {
-        const date = req.params.date;
-
-        const slots = await getAvailableSlots(date);
-
-        const simplifiedSlots = slots.map(slot => ({
-            start: slot.start.toLocaleTimeString(
-                "en-SG",
-                {
-                    timeZone: "Asia/Singapore",
-                    hour: "2-digit",
-                    minute: "2-digit"
-                }
-            ),
-            end: slot.end.toLocaleTimeString(
-                "en-SG",
-                {
-                    timeZone: "Asia/Singapore",
-                    hour: "2-digit",
-                    minute: "2-digit"
-                }
-            )
-        }));
-
-        res.json(simplifiedSlots);
-    }
-    catch (error) {
-        console.error(
-            "Availability error:",
-            error.response?.data || error.message
-        );
-
-        res.status(500).json({
-            error: "Failed to calculate availability"
-        });
-    }
-});
-app.get("/test-create-event", async (req, res) => {
-    try {
-        const event = await createBookingEvent({
-            customerName: "Test Customer",
-            customerPhone: "6580000000",
-            startDateTime:
-                "2026-09-20T15:00:00+08:00",
-            endDateTime:
-                "2026-09-20T16:00:00+08:00"
-        });
-
-        res.json({
-            message: "Event created",
-            eventId: event.id
-        });
-    }
-    catch (error) {
-        console.error(
-            "Create event error:",
-            error.response?.data || error.message
-        );
-
-        res.status(500).json({
-            error: "Failed to create calendar event"
-        });
-    }
+app.get("/health", (req, res) => {
+    res.status(200).json({ status: "ok" });
 });
 
 function verifyMetaWebhookSignature(req) {
@@ -1944,38 +1861,129 @@ function requireValidMetaSignature(req, res, next) {
     next();
 }
 //POST
+
 app.post(
     "/webhook",
     requireValidMetaSignature,
     async (req, res) => {
+        try {
+            const entries = req.body.entry || [];
 
-    try {
-        const value = req.body.entry?.[0]?.changes?.[0]?.value;
-        
-        if (!value?.messages) {
+            for (const entry of entries) {
+                for (const change of entry.changes || []) {
+                    const messages = change.value?.messages || [];
+
+                    for (const message of messages) {
+                        const messageId = message.id;
+                        const from = message.from;
+
+                        // Do not process a message that cannot
+                        // be safely identified.
+                        if (!messageId || !from) {
+                            console.warn(
+                                "Skipping message without ID or sender"
+                            );
+                            continue;
+                        }
+
+                        const { result, claimToken } =
+                            await claimMessage(messageId);
+
+                        if (result === "completed") {
+                            console.log(
+                                "Skipping completed duplicate:",
+                                messageId
+                            );
+                            continue;
+                        }
+
+                        if (result === "busy") {
+                            console.log(
+                                "Message already being processed:",
+                                messageId
+                            );
+
+                            // Ask Meta to retry rather than
+                            // acknowledging unfinished work.
+                            return res.sendStatus(503);
+                        }
+
+                        if (result !== "claimed") {
+                            throw new Error(
+                                `Unexpected claim result: ${result}`
+                            );
+                        }
+
+                        try {
+                            console.log(
+                                "Processing message:",
+                                messageId,
+                                "from:",
+                                from
+                            );
+
+                            if (message.type === "text") {
+                                await handleTextMessage(from, message);
+                            }
+                            else if (message.type === "interactive") {
+                                await handleInteractiveMessage(
+                                    from,
+                                    message
+                                );
+                            }
+                            else {
+                                console.log(
+                                    "Unsupported message type:",
+                                    message.type
+                                );
+                            }
+
+                            await completeMessage(
+                                messageId,
+                                claimToken
+                            );
+
+                            console.log(
+                                "Completed message:",
+                                messageId
+                            );
+                        }
+                        catch (processingError) {
+                            console.error(
+                                "Message processing failed:",
+                                messageId,
+                                processingError
+                            );
+
+                            try {
+                                await releaseMessage(
+                                    messageId,
+                                    claimToken
+                                );
+                            }
+                            catch (releaseError) {
+                                console.error(
+                                    "Failed to release message claim:",
+                                    releaseError
+                                );
+                            }
+
+                            // Do not return 200 for unfinished work.
+                            return res.sendStatus(500);
+                        }
+                    }
+                }
+            }
+
             return res.sendStatus(200);
         }
-        
-        const message = value.messages[0];
-        const from = message.from;
+        catch (error) {
+            console.error("Webhook error:", error);
 
-        console.log("Message from:", from);
-
-        if (message.type === "text") {
-            await handleTextMessage(from, message);
+            return res.sendStatus(500);
         }
-
-        else if (message.type === "interactive") {
-            await handleInteractiveMessage(from, message);
-        }
-
     }
-    catch (error) {
-        console.error("Error reading webhook:", error);
-    }
-
-    res.sendStatus(200);
-});
+);
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
