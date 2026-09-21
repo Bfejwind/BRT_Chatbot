@@ -5,10 +5,7 @@ const axios = require("axios");
 const {
     getUpcomingEvents,
     getAvailableSlots,
-    createBookingEvent,
-    createSessionEvent,
-    hasExternalCalendarConflict,
-    updateSessionEventOccupancy
+    createBookingEvent
 } = require("./calendarService");
 const userLanguages = {};
 const app = express();
@@ -61,14 +58,13 @@ const {
     startBooking,
     saveBookingDate,
     saveBookingTime,
-    savePartySize,
     submitBooking,
     cancelDraft,
     getBookingById,
-    rejectBooking,
-    getSessionAvailability,
-    markSessionCalendarSynced,
-    getBookingSession
+    claimBooking,
+    reserveSlot,
+    releaseSlot,
+    updateBooking
 } = require("./bookingDatabase");
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -679,60 +675,11 @@ async function sendAvailableDates(to) {
         );
     }
 }
-async function getBookableSlots(date, partySize = 1) {
-    const sessions = await getSessionAvailability(date);
-
-    const slots = [];
-
-    for (let hour = 12; hour < 17; hour++) {
-        const time = `${String(hour).padStart(2, "0")}:00`;
-
-        const session = sessions.find(
-            item => item.booking_time.slice(0, 5) === time
-        );
-
-        const remainingPlaces = session
-            ? session.capacity - session.reserved_places
-            : 10;
-
-        if (remainingPlaces < partySize) {
-            continue;
-        }
-
-        const hasConflict = await hasExternalCalendarConflict({
-            bookingDate: date,
-            bookingTime: time,
-            sessionId: session?.id
-        });
-
-        if (hasConflict) {
-            continue;
-        }
-
-        const start = new Date(
-            `${date}T${time}:00+08:00`
-        );
-
-        const end = new Date(
-            start.getTime() + 60 * 60 * 1000
-        );
-
-        slots.push({
-            start,
-            end,
-            time,
-            remainingPlaces,
-            sessionId: session?.id || null
-        });
-    }
-
-    return slots;
-}
 async function sendAvailableTimes(to, date) {
     try {
         const isChinese = getLanguage(to) === "zh";
 
-        const slots = await getBookableSlots(date);
+        const slots = await getAvailableSlots(date);
 
         if (slots.length === 0) {
             await sendMessage(
@@ -769,10 +716,7 @@ async function sendAvailableTimes(to, date) {
 
             return {
                 id: `BOOK_TIME_${hour}`,
-                title: startTime,
-                description: isChinese
-                    ? `剩余 ${slot.remainingPlaces} 个名额`
-                    : `${slot.remainingPlaces} places remaining`
+                title: startTime
             };
         });
 
@@ -821,67 +765,16 @@ async function sendAvailableTimes(to, date) {
         );
     }
 }
-async function sendPartySizeMenu(to) {
-    const isChinese = getLanguage(to) === "zh";
-
-    const rows = [];
-
-    for (let size = 1; size <= 10; size++) {
-        rows.push({
-            id: `BOOK_SIZE_${size}`,
-            title: isChinese
-                ? `${size} 位`
-                : `${size} ${size === 1 ? "person" : "people"}`
-        });
-    }
-
-    await axios.post(
-        `https://graph.facebook.com/v26.0/${process.env.PHONE_NUMBER_ID}/messages`,
-        {
-            messaging_product: "whatsapp",
-            to,
-            type: "interactive",
-            interactive: {
-                type: "list",
-                body: {
-                    text: isChinese
-                        ? "请问有多少位参加？"
-                        : "How many people will attend?"
-                },
-                action: {
-                    button: isChinese ? "选择人数" : "Choose group size",
-                    sections: [
-                        {
-                            title: isChinese ? "参加人数" : "Group size",
-                            rows
-                        }
-                    ]
-                }
-            }
-        },
-        {
-            headers: {
-                Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
-                "Content-Type": "application/json"
-            }
-        }
-    );
-}
 async function sendBookingConfirmation(to) {
     const booking = await getDraft(to);
     const isChinese = getLanguage(to) === "zh";
 
-    // Make sure the customer has selected all three details.
-    if (
-        !booking?.booking_date ||
-        !booking?.booking_time ||
-        !booking?.party_size
-    ) {
+    if (!booking?.booking_date || !booking?.booking_time) {
         await sendMessage(
             to,
             isChinese
-                ? "预约资料不完整，请重新开始预约。"
-                : "Your booking details are incomplete. Please start again."
+                ? "预约出现问题，请重新尝试。"
+                : "Something went wrong with your booking. Please try again."
         );
 
         return;
@@ -897,8 +790,8 @@ async function sendBookingConfirmation(to) {
                 type: "button",
                 body: {
                     text: isChinese
-                        ? `请确认您的预约申请。\n\n日期：${booking.booking_date}\n时间：${booking.booking_time}\n人数：${booking.party_size} 位`
-                        : `Please confirm your booking request.\n\nDate: ${booking.booking_date}\nTime: ${booking.booking_time}\nGroup size: ${booking.party_size}`
+                        ? `请确认您的预约申请。\n\n日期：${booking.booking_date}\n时间：${booking.booking_time}`
+                        : `Please confirm your booking request.\n\nDate: ${booking.booking_date}\nTime: ${booking.booking_time}`
                 },
                 action: {
                     buttons: [
@@ -936,146 +829,27 @@ async function sendBookingConfirmation(to) {
 async function handleBookingConfirm(from) {
     const isChinese = getLanguage(from) === "zh";
 
-    let booking = null;
+    const booking = await submitBooking(from);
 
-    try {
-        // 1. Read the customer's selected booking details.
-        const draft = await getDraft(from);
-
-        if (
-            !draft ||
-            !draft.booking_date ||
-            !draft.booking_time ||
-            !draft.party_size
-        ) {
-            await sendMessage(
-                from,
-                isChinese
-                    ? "找不到完整的预约信息，请重新开始预约。"
-                    : "Your booking details are incomplete. Please start again."
-            );
-            return;
-        }
-
-        // 2. Find the existing session, if there is one.
-        const sessions = await getSessionAvailability(
-            draft.booking_date
-        );
-
-        const selectedTime = String(
-            draft.booking_time
-        ).slice(0, 5);
-
-        const existingSession = sessions.find(
-            session =>
-                String(session.booking_time).slice(0, 5) ===
-                selectedTime
-        );
-
-        // 3. Check for unrelated Google Calendar events.
-        const hasConflict = await hasExternalCalendarConflict({
-            bookingDate: draft.booking_date,
-            bookingTime: selectedTime,
-            sessionId: existingSession?.id
-        });
-
-        if (hasConflict) {
-            await sendMessage(
-                from,
-                isChinese
-                    ? "该时段目前无法预约，请选择其他时间。"
-                    : "That time is no longer available. Please choose another time."
-            );
-
-            await sendAvailableTimes(
-                from,
-                draft.booking_date
-            );
-
-            return;
-        }
-
-        // 4. Reserve places and approve the booking in Supabase.
-        // Do not call this a second time for Calendar retries.
-        booking = await submitBooking(from);
-
-        if (!booking) {
-            throw new Error(
-                "submitBooking returned no booking"
-            );
-        }
-
-        // 5. Create or retrieve ONE shared Calendar event
-        // for this session.
-        const calendarEvent = await createSessionEvent({
-            sessionId: booking.session_id,
-            bookingDate: booking.booking_date,
-            bookingTime: booking.booking_time
-        });
-
-        // 6. Record the shared event ID in Supabase.
-        await markSessionCalendarSynced(
-            booking.session_id,
-            calendarEvent.id
-        );
-        
-        const session = await getBookingSession(
-            booking.session_id
-        );
-
-        await updateSessionEventOccupancy({
-            calendarEventId: calendarEvent.id,
-            reservedPlaces: session.reserved_places,
-            capacity: session.capacity
-        });
-
-        // 7. Confirm only after Calendar synchronization succeeds.
+    if (!booking) {
         await sendMessage(
             from,
             isChinese
-                ? `您的预约已确认！\n\n日期：${booking.booking_date}\n时间：${booking.booking_time}\n人数：${booking.party_size} 位`
-                : `Your booking is confirmed!\n\nDate: ${booking.booking_date}\nTime: ${booking.booking_time}\nGroup size: ${booking.party_size}`
+                ? "找不到您的预约信息，请重新开始预约。"
+                : "Your booking information could not be found. Please start again."
         );
 
-    } catch (error) {
-        console.error("Booking confirmation error:", error);
-
-        const errorText = error.message || "";
-
-        if (errorText.includes("NOT_ENOUGH_PLACES")) {
-            await sendMessage(
-                from,
-                isChinese
-                    ? "该时段已没有足够名额，请重新选择时间。"
-                    : "There are no longer enough places at that time. Please choose another time."
-            );
-            return;
-        }
-
-        if (errorText.includes("ALREADY_BOOKED")) {
-            await sendMessage(
-                from,
-                isChinese
-                    ? "此电话号码已提交过该时段的预约。如需查询，请联系工作人员。"
-                    : "This phone number already has a booking for that session. Please contact staff to check its status."
-            );
-            return;
-        }
-
-        // A reservation may have succeeded even if a later
-        // Calendar or WhatsApp operation failed.
-        console.error(
-            "Booking may require reconciliation:",
-            booking?.id || "Booking ID unknown"
-        );
-
-        await sendMessage(
-            from,
-            isChinese
-                ? "暂时无法核实完整的预约结果，请联系工作人员查询，避免重复预约。"
-                : "We couldn't verify the complete booking result. Please contact staff to check before trying again."
-        );
+        return;
     }
+
+    await sendBookingRequestToStaff(from, booking);
+
+    await sendMessage(
+        from,
+        isChinese
+            ? "您的预约申请已发送给工作人员审核。"
+            : "Your booking request has been sent to our staff for approval."
+    );
 }
 
 async function handleBookingCancel(from) {
@@ -1113,8 +887,7 @@ async function sendBookingRequestToStaff(customerPhone, booking) {
                             `Customer: +${customerPhone}\n` +
                             `Language: ${customerLanguage}\n` +
                             `Date: ${booking.booking_date}\n` +
-                            `Time: ${booking.booking_time}\n` +
-                            `Group size: ${booking.party_size}`
+                            `Time: ${booking.booking_time}`
                     },
                     action: {
                         buttons: [
@@ -1532,76 +1305,7 @@ async function handleBookingDate(from, selectionId) {
 
     await sendAvailableTimes(from, date);
 }
-async function handleBookingPartySize(from, selectionId) {
-    const partySize = Number(
-        selectionId.replace("BOOK_SIZE_", "")
-    );
 
-    const isChinese = getLanguage(from) === "zh";
-
-    if (
-        !Number.isInteger(partySize) ||
-        partySize < 1 ||
-        partySize > 10
-    ) {
-        await sendMessage(
-            from,
-            isChinese ? "参加人数无效。" : "Invalid group size."
-        );
-        return;
-    }
-
-    try {
-        const draft = await getDraft(from);
-
-        if (!draft?.booking_date || !draft?.booking_time) {
-            await sendMessage(
-                from,
-                isChinese
-                    ? "预约资料已失效，请重新开始预约。"
-                    : "Your booking session has expired. Please start again."
-            );
-            return;
-        }
-
-        // Recheck the selected time for this specific group size.
-        const availableSlots = await getBookableSlots(
-            draft.booking_date,
-            partySize
-        );
-
-        const selectedTime = draft.booking_time.slice(0, 5);
-
-        const selectedSlot = availableSlots.find(
-            slot => slot.time === selectedTime
-        );
-
-        if (!selectedSlot) {
-            await sendMessage(
-                from,
-                isChinese
-                    ? "该时段已没有足够名额，请选择其他时间。"
-                    : "There are no longer enough places at that time. Please choose another time."
-            );
-
-            await sendAvailableTimes(from, draft.booking_date);
-            return;
-        }
-
-        await savePartySize(from, partySize);
-        await sendBookingConfirmation(from);
-
-    } catch (error) {
-        console.error("Party size error:", error);
-
-        await sendMessage(
-            from,
-            isChinese
-                ? "暂时无法检查预约名额，请稍后再试。"
-                : "We couldn't check availability right now. Please try again later."
-        );
-    }
-}
 async function handleBookingTime(from, selectionId) {
     const time = selectionId.replace("BOOK_TIME_", "");
 
@@ -1622,7 +1326,7 @@ async function handleBookingTime(from, selectionId) {
 
     // Do not trust an old WhatsApp menu.
     // Check that the selected time is still offered.
-    const currentSlots = await getBookableSlots(
+    const currentSlots = await getAvailableSlots(
         draft.booking_date
     );
 
@@ -1658,32 +1362,212 @@ async function handleBookingTime(from, selectionId) {
 
     console.log("Selected booking time:", time);
 
-    await sendPartySizeMenu(from);
+    await sendBookingConfirmation(from);
 }
 
 async function handleBookingApproval(from, selectionId) {
+    // Only the configured staff number may approve.
     if (from !== process.env.STAFF_PHONE_NUMBER) {
+        console.warn("Unauthorized approval attempt");
         return;
     }
 
-    await sendMessage(
-        from,
-        "Booking approval is temporarily disabled while the " +
-        "new capacity and Calendar integration is being completed."
-    );
+    const bookingId = selectionId.replace("APPROVE_", "");
+
+    // Atomically claim this pending request.
+    const booking = await claimBooking(bookingId);
+
+    if (!booking) {
+        await sendMessage(
+            from,
+            "This booking is no longer pending or has already been handled."
+        );
+        return;
+    }
+
+    // Prevent another approval through this bot
+    // from reserving the same slot.
+    const reservation = await reserveSlot(booking);
+
+    if (!reservation) {
+        await updateBooking(
+            booking.id,
+            "approving",
+            { status: "slot_unavailable" }
+        );
+
+        await sendMessage(
+            from,
+            "This time has already been reserved by another booking."
+        );
+
+        await sendMessage(
+            booking.customer_phone,
+            "Sorry, your selected time is no longer available. Please start a new booking."
+        );
+
+        return;
+    }
+
+    try {
+        // Recheck Google Calendar AT APPROVAL TIME.
+        const currentSlots = await getAvailableSlots(
+            booking.booking_date
+        );
+
+        const selectedSlot = currentSlots.find(slot => {
+            const slotTime = slot.start.toLocaleTimeString(
+                "en-GB",
+                {
+                    timeZone: "Asia/Singapore",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    hour12: false
+                }
+            );
+
+            return slotTime === booking.booking_time;
+        });
+
+        if (!selectedSlot) {
+            await updateBooking(
+                booking.id,
+                "approving",
+                { status: "slot_unavailable" }
+            );
+
+            await releaseSlot(booking.id);
+
+            await sendMessage(
+                from,
+                "This booking time is no longer available in Google Calendar."
+            );
+
+            await sendMessage(
+                booking.customer_phone,
+                "Sorry, your selected time is no longer available. Please start a new booking."
+            );
+
+            return;
+        }
+
+        // Create the actual Calendar event.
+        const event = await createBookingEvent({
+            customerName: "WhatsApp Customer",
+            customerPhone: booking.customer_phone,
+            startDateTime:
+                selectedSlot.start.toISOString(),
+            endDateTime:
+                selectedSlot.end.toISOString()
+        });
+
+        if (!event?.id) {
+            throw new Error(
+                "Calendar did not return an event ID"
+            );
+        }
+
+        // Save the Calendar event ID and approval.
+        const approved = await updateBooking(
+            booking.id,
+            "approving",
+            {
+                status: "approved",
+                google_calendar_event_id: event.id
+            }
+        );
+
+        if (!approved) {
+            throw new Error(
+                "Calendar event created but booking database update failed"
+            );
+        }
+
+        const isChinese =
+            getLanguage(booking.customer_phone) === "zh";
+
+        await sendMessage(
+            booking.customer_phone,
+            isChinese
+                ? `您的预约已确认。\n\n日期：${booking.booking_date}\n时间：${booking.booking_time}`
+                : `Your booking has been confirmed.\n\nDate: ${booking.booking_date}\nTime: ${booking.booking_time}`
+        );
+
+        await sendMessage(
+            from,
+            "Booking approved and added to Google Calendar."
+        );
+
+    } catch (error) {
+        console.error(
+            "Booking approval needs attention:",
+            booking.id,
+            error
+        );
+
+        // Deliberately leave the booking as "approving"
+        // and retain its slot reservation.
+        //
+        // Calendar creation might have succeeded even
+        // if the response or database update failed.
+        // Automatically retrying could create a
+        // duplicate Calendar event.
+
+        await sendMessage(
+            from,
+            `Booking ${booking.id} needs manual checking. Check Google Calendar before trying again.`
+        );
+    }
 }
 
 async function handleBookingRejection(from, selectionId) {
     if (from !== process.env.STAFF_PHONE_NUMBER) {
+        console.warn("Unauthorized rejection attempt");
         return;
     }
 
+    const bookingId = selectionId.replace("REJECT_", "");
+
+    const booking = await getBookingById(bookingId);
+
+    if (!booking || booking.status !== "pending") {
+        await sendMessage(
+            from,
+            "This booking is no longer pending or has already been handled."
+        );
+        return;
+    }
+
+    const rejected = await updateBooking(
+        booking.id,
+        "pending",
+        { status: "rejected" }
+    );
+
+    if (!rejected) {
+        await sendMessage(
+            from,
+            "This booking was already handled."
+        );
+        return;
+    }
+
+    const isChinese =
+        getLanguage(booking.customer_phone) === "zh";
+
+    await sendMessage(
+        booking.customer_phone,
+        isChinese
+            ? `您在 ${booking.booking_date} ${booking.booking_time} 的预约申请未获批准。\n\n请选择其他日期或时间。`
+            : `Your booking request for ${booking.booking_date} at ${booking.booking_time} was not approved.\n\nPlease choose another date or time.`
+    );
+
     await sendMessage(
         from,
-        "Booking rejection is temporarily disabled while the " +
-        "new booking integration is being completed."
+        "Booking rejected."
     );
 }
+
 
 
 // =========================
@@ -2031,23 +1915,19 @@ async function handleTextMessage(from, message) {
     await sendContactNavigation(from);
 }
 //Interactive response Handler
-
 async function handleInteractiveMessage(from, message) {
     let selectionId;
 
-    if (message?.interactive?.type === "button_reply") {
-        selectionId = message.interactive.button_reply?.id;
-    } else if (message?.interactive?.type === "list_reply") {
-        selectionId = message.interactive.list_reply?.id;
+    if (message.interactive.type === "button_reply") {
+        selectionId = message.interactive.button_reply.id;
     }
 
-    if (typeof selectionId !== "string" || !selectionId) {
+    else if (message.interactive.type === "list_reply") {
+        selectionId = message.interactive.list_reply.id;
+    }
+
+    if (!selectionId) {
         console.log("Unknown interactive message");
-        return;
-    }
-
-    if (selectionId.startsWith("BOOK_SIZE_")) {
-        await handleBookingPartySize(from, selectionId);
         return;
     }
 
@@ -2060,12 +1940,22 @@ async function handleInteractiveMessage(from, message) {
         await handleBookingTime(from, selectionId);
         return;
     }
+    if (selectionId.startsWith("APPROVE_")) {
+        await handleBookingApproval(from, selectionId);
+        return;
+    }
+
+    if (selectionId.startsWith("REJECT_")) {
+        await handleBookingRejection(from, selectionId);
+        return;
+    }
 
     const handler = interactionHandlers[selectionId];
 
     if (handler) {
         await handler(from);
-    } else {
+    }
+    else {
         console.log("No handler found for:", selectionId);
     }
 }

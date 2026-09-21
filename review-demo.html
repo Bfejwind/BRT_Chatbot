@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BRT WhatsApp App Review Demo</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 80px auto;
+            padding: 24px;
+        }
+
+        button {
+            padding: 14px 22px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        #status {
+            margin-top: 20px;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>BRT WhatsApp Chatbot</h1>
+
+    <p>
+        Send a test WhatsApp message using the
+        WhatsApp Cloud API.
+    </p>
+
+    <button id="sendButton" onclick="sendTestMessage()">
+        Send Test Message
+    </button>
+
+    <p id="status"></p>
+
+    <script>
+        async function sendTestMessage() {
+            const button = document.getElementById("sendButton");
+            const status = document.getElementById("status");
+
+            button.disabled = true;
+            status.textContent = "Sending message...";
+
+            try {
+                const response = await fetch(
+                    "/review/send-test-message",
+                    {
+                        method: "POST"
+                    }
+                );
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(
+                        result.error || "Message failed"
+                    );
+                }
+
+                status.textContent =
+                    "Message submitted successfully!\n" +
+                    "Message ID: " + result.messageId;
+
+            } catch (error) {
+                status.textContent =
+                    "Error: " + error.message;
+            } finally {
+                button.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
