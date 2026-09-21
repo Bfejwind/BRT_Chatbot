@@ -18,27 +18,25 @@ const interactionHandlers = {
     LANG_ZH: handleChineseLanguage,
     // Main Menu
     FAQ: handleFAQ,
-    SERVICES: handleServices,
+    THINGS_TO_NOTE: handleThingsToNote,
     BOOKING: handleBooking,
     CONTACT: handleContact,
     BOOK_CONFIRM: handleBookingConfirm,
     BOOK_CANCEL: handleBookingCancel,
 
     // FAQ
-    FAQ_HOURS: handleFAQHours,
-    FAQ_TEACEREMONY: handleFAQTeaCeremony,
-    FAQ_RULES: handleFAQRules,
-    FAQ_LEAVES: handleFAQLeaves,
-    FAQ_PRICES: handleFAQTeaPrices,
-
-    // Services
-    SERVICE_TEA: handleServiceTea,
-    SERVICE_WATER: handleServiceWater,
-    SERVICE_MUSEUM: handleServiceMuseum,
+    FAQ_EXPECT: handleFAQExpect,
+    FAQ_DURATION: handleFAQDuration,
+    FAQ_BEGINNER: handleFAQBeginner,
+    FAQ_BRING: handleFAQBring,
+    FAQ_WEAR: handleFAQWear,
+    FAQ_CHILDREN: handleFAQChildren,
+    FAQ_CAFFEINE: handleFAQCaffeine,
+    FAQ_CHANGE: handleFAQChange,
+    FAQ_LATE: handleFAQLate,
 
     // Navigation
     BACK_FAQ: handleBackFAQ,
-    BACK_SERVICES: handleBackServices,
     MAIN_MENU: handleMainMenu,
 
     // Question handling
@@ -70,13 +68,19 @@ const {
     markSessionCalendarSynced,
     getBookingSession
 } = require("./bookingDatabase");
+const crypto = require("node:crypto");
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 function getLanguage(from) {
     return userLanguages[from] || "en";
 }
-app.use(express.json());
+
+app.use(express.json({
+    verify: (req, res, buffer) => {
+        req.rawBody = Buffer.from(buffer);
+    }
+}));
 
 const PORT = process.env.PORT || 3000;
 
@@ -175,6 +179,54 @@ app.get("/test-create-event", async (req, res) => {
         });
     }
 });
+
+function verifyMetaWebhookSignature(req) {
+    const appSecret = process.env.META_APP_SECRET;
+    const signature = req.get("X-Hub-Signature-256");
+
+    // Fail closed if the server is not configured correctly.
+    if (!appSecret) {
+        console.error("META_APP_SECRET is not configured");
+        return false;
+    }
+
+    // A valid signature requires the original request body.
+    if (!Buffer.isBuffer(req.rawBody)) {
+        console.error("Webhook raw body is unavailable");
+        return false;
+    }
+
+    // Meta's signature must be sha256= followed by 64 hex characters.
+    if (
+        typeof signature !== "string" ||
+        !/^sha256=[a-fA-F0-9]{64}$/.test(signature)
+    ) {
+        return false;
+    }
+
+    const expectedSignature =
+        "sha256=" +
+        crypto
+            .createHmac("sha256", appSecret)
+            .update(req.rawBody)
+            .digest("hex");
+
+    const receivedBuffer = Buffer.from(signature, "utf8");
+    const expectedBuffer = Buffer.from(
+        expectedSignature,
+        "utf8"
+    );
+
+    // timingSafeEqual requires equal-length buffers.
+    if (receivedBuffer.length !== expectedBuffer.length) {
+        return false;
+    }
+
+    return crypto.timingSafeEqual(
+        receivedBuffer,
+        expectedBuffer
+    );
+}
 app.get("/webhook", (req, res) => {
     const mode = req.query["hub.mode"];
     const token = req.query["hub.verify_token"];
@@ -363,10 +415,10 @@ async function sendMainMenu(to) {
                                             : "❓ FAQ"
                                     },
                                     {
-                                        id: "SERVICES",
+                                        id: "THINGS_TO_NOTE",
                                         title: isChinese
-                                            ? "🏛️ 服务"
-                                            : "🏛️ Services"
+                                            ? "📋 注意事项"
+                                            : "📋 Things to Note"
                                     },
                                     {
                                         id: "BOOKING",
@@ -404,105 +456,119 @@ async function sendMainMenu(to) {
         );
     }
 }
+
 async function sendFAQMenu(to) {
     try {
-        const language = getLanguage(to);
-        const isChinese = language === "zh";
+        const isChinese = getLanguage(to) === "zh";
+
+        const faqs = [
+            {
+                id: "FAQ_EXPECT",
+                en: "What should I expect during a tea ceremony?",
+                zh: "茶道体验包括什么？"
+            },
+            {
+                id: "FAQ_DURATION",
+                en: "How long does the tea ceremony take?",
+                zh: "茶道体验需要多长时间？"
+            },
+            {
+                id: "FAQ_BEGINNER",
+                en: "Do I need to know anything about tea beforehand?",
+                zh: "需要事先了解茶知识吗？"
+            },
+            {
+                id: "FAQ_BRING",
+                en: "Do I need to bring anything?",
+                zh: "需要携带什么吗？"
+            },
+            {
+                id: "FAQ_WEAR",
+                en: "What should I wear?",
+                zh: "应该穿什么？"
+            },
+            {
+                id: "FAQ_CHILDREN",
+                en: "Can children attend?",
+                zh: "儿童可以参加吗？"
+            },
+            {
+                id: "FAQ_CAFFEINE",
+                en: "Does the tea contain caffeine?",
+                zh: "茶含有咖啡因吗？"
+            },
+            {
+                id: "FAQ_CHANGE",
+                en: "Can I cancel or change my booking?",
+                zh: "可以取消或更改预约吗？"
+            },
+            {
+                id: "FAQ_LATE",
+                en: "What if I am late to my booking?",
+                zh: "如果预约迟到了怎么办？"
+            }
+        ];
+
+        // WhatsApp list-row titles have a 24-character limit.
+        // Display shortened titles while retaining full questions below.
+        const shortTitles = {
+            FAQ_EXPECT: ["What to expect?", "体验内容"],
+            FAQ_DURATION: ["How long is it?", "体验时长"],
+            FAQ_BEGINNER: ["Tea knowledge needed?", "需要茶知识吗？"],
+            FAQ_BRING: ["What should I bring?", "需要携带什么？"],
+            FAQ_WEAR: ["What should I wear?", "应该穿什么？"],
+            FAQ_CHILDREN: ["Can children attend?", "儿童可以参加吗？"],
+            FAQ_CAFFEINE: ["Does tea have caffeine?", "茶含咖啡因吗？"],
+            FAQ_CHANGE: ["Change or cancel?", "更改或取消预约？"],
+            FAQ_LATE: ["What if I'm late?", "如果迟到了？"]
+        };
+
+        const rows = faqs.map(faq => {
+            const title = isChinese
+                ? shortTitles[faq.id][1]
+                : shortTitles[faq.id][0];
+
+            const fullQuestion = isChinese ? faq.zh : faq.en;
+
+            return {
+                id: faq.id,
+                title,
+                // Only show a description when it adds different text.
+                ...(title === fullQuestion
+                    ? {}
+                    : { description: fullQuestion })
+            };
+        });
 
         await axios.post(
             `https://graph.facebook.com/v26.0/${process.env.PHONE_NUMBER_ID}/messages`,
             {
                 messaging_product: "whatsapp",
-                to: to,
+                to,
                 type: "interactive",
                 interactive: {
                     type: "list",
-
                     header: {
                         type: "text",
                         text: isChinese
                             ? "常见问题"
                             : "Frequently Asked Questions"
                     },
-
                     body: {
                         text: isChinese
-                            ? "您想了解什么？"
-                            : "What would you like to know?"
+                            ? "请选择您想了解的问题："
+                            : "Please select a question:"
                     },
-
                     action: {
                         button: isChinese
-                            ? "查看常见问题"
-                            : "View FAQs",
-
+                            ? "查看问题"
+                            : "View Questions",
                         sections: [
                             {
                                 title: isChinese
                                     ? "常见问题"
                                     : "FAQs",
-
-                                rows: [
-                                    {
-                                        id: "FAQ_HOURS",
-
-                                        title: isChinese
-                                            ? "🕒 营业时间"
-                                            : "🕒 Opening Hours",
-
-                                        description: isChinese
-                                            ? "查看我们的营业时间"
-                                            : "View our opening hours"
-                                    },
-
-                                    {
-                                        id: "FAQ_TEACEREMONY",
-
-                                        title: isChinese
-                                            ? "🍵 茶道"
-                                            : "🍵 Tea Ceremony",
-
-                                        description: isChinese
-                                            ? "什么是茶道？"
-                                            : "What is Tea Ceremony?"
-                                    },
-
-                                    {
-                                        id: "FAQ_RULES",
-
-                                        title: isChinese
-                                            ? "📜 茶道礼仪"
-                                            : "📜 Tea Rules",
-
-                                        description: isChinese
-                                            ? "了解茶道礼仪"
-                                            : "Tea ceremony etiquette"
-                                    },
-
-                                    {
-                                        id: "FAQ_LEAVES",
-
-                                        title: isChinese
-                                            ? "🍃 茶叶"
-                                            : "🍃 Tea Leaves",
-
-                                        description: isChinese
-                                            ? "了解我们的茶叶"
-                                            : "Learn about our tea leaves"
-                                    },
-
-                                    {
-                                        id: "FAQ_PRICES",
-
-                                        title: isChinese
-                                            ? "💰 茶道价格"
-                                            : "💰 Tea Ceremony Prices",
-
-                                        description: isChinese
-                                            ? "查看我们的收费标准"
-                                            : "Check our pricing"
-                                    }
-                                ]
+                                rows
                             }
                         ]
                     }
@@ -510,89 +576,22 @@ async function sendFAQMenu(to) {
             },
             {
                 headers: {
-                    Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
+                    Authorization:
+                        `Bearer ${process.env.WHATSAPP_TOKEN}`,
                     "Content-Type": "application/json"
                 }
             }
         );
 
-        console.log("FAQ menu sent");
-    }
-    catch (error) {
+        console.log("FAQ menu sent successfully");
+    } catch (error) {
         console.error(
             "Error sending FAQ menu:",
             error.response?.data || error.message
         );
     }
 }
-async function sendServicesMenu(to) {
-    try {
-        const isChinese = getLanguage(to) === "zh";
 
-        const response = await axios.post(
-            `https://graph.facebook.com/v26.0/${process.env.PHONE_NUMBER_ID}/messages`,
-            {
-                messaging_product: "whatsapp",
-                to: to,
-                type: "interactive",
-                interactive: {
-                    type: "button",
-                    body: {
-                        text: isChinese
-                            ? "我们的服务\n\n您想了解哪项服务？"
-                            : "Our Services\n\nWhich service would you like to learn more about?"
-                    },
-                    action: {
-                        buttons: [
-                            {
-                                type: "reply",
-                                reply: {
-                                    id: "SERVICE_TEA",
-                                    title: isChinese
-                                        ? "茶道体验"
-                                        : "Tea Ceremony"
-                                }
-                            },
-                            {
-                                type: "reply",
-                                reply: {
-                                    id: "SERVICE_WATER",
-                                    title: isChinese
-                                        ? "冰川水"
-                                        : "Glacial Water"
-                                }
-                            },
-                            {
-                                type: "reply",
-                                reply: {
-                                    id: "SERVICE_MUSEUM",
-                                    title: isChinese
-                                        ? "博物馆导览"
-                                        : "Museum Tour"
-                                }
-                            }
-                        ]
-                    }
-                }
-            },
-            {
-                headers: {
-                    Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
-                    "Content-Type": "application/json"
-                }
-            }
-        );
-
-        console.log("Services menu sent successfully");
-        console.log(response.data);
-
-    } catch (error) {
-        console.error(
-            "Error sending Services menu:",
-            error.response?.data || error.message
-        );
-    }
-}
 async function handleBooking(from) {
     await startBooking(from);
 
@@ -1210,64 +1209,7 @@ async function sendNavigationMenu(to) {
         );
     }
 }
-async function sendServicesNavigation(to) {
-    try {
-        const isChinese = getLanguage(to) === "zh";
 
-        const response = await axios.post(
-            `https://graph.facebook.com/v26.0/${process.env.PHONE_NUMBER_ID}/messages`,
-            {
-                messaging_product: "whatsapp",
-                to: to,
-                type: "interactive",
-                interactive: {
-                    type: "button",
-                    body: {
-                        text: isChinese
-                            ? "您想了解其他服务吗？"
-                            : "Would you like to explore another service?"
-                    },
-                    action: {
-                        buttons: [
-                            {
-                                type: "reply",
-                                reply: {
-                                    id: "BACK_SERVICES",
-                                    title: isChinese
-                                        ? "返回服务"
-                                        : "Back to Services"
-                                }
-                            },
-                            {
-                                type: "reply",
-                                reply: {
-                                    id: "MAIN_MENU",
-                                    title: isChinese
-                                        ? "主菜单"
-                                        : "Main Menu"
-                                }
-                            }
-                        ]
-                    }
-                }
-            },
-            {
-                headers: {
-                    Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
-                    "Content-Type": "application/json"
-                }
-            }
-        );
-
-        console.log("Services navigation sent successfully");
-
-    } catch (error) {
-        console.error(
-            "Error sending Services navigation:",
-            error.response?.data || error.message
-        );
-    }
-}
 async function sendContactNavigation(to) {
     try {
         const isChinese = getLanguage(to) === "zh";
@@ -1316,79 +1258,7 @@ async function sendContactNavigation(to) {
         );
     }
 }
-async function sendTeaCeremonyMenu(to) {
-    try {
-        const isChinese = getLanguage(to) === "zh";
 
-        const response = await axios.post(
-            `https://graph.facebook.com/v26.0/${process.env.PHONE_NUMBER_ID}/messages`,
-            {
-                messaging_product: "whatsapp",
-                to: to,
-                type: "interactive",
-                interactive: {
-                    type: "button",
-                    body: {
-                        text: isChinese
-                            ? "茶道体验\n\n" +
-                              "体验使用来自中国的冰川水进行的传统茶道。\n\n" +
-                              "您想预约吗？"
-                            : "Tea Ceremony\n\n" +
-                              "Experience our traditional tea ceremony using glacial water from China.\n\n" +
-                              "Would you like to make a booking?"
-                    },
-                    action: {
-                        buttons: [
-                            {
-                                type: "reply",
-                                reply: {
-                                    id: "BOOK_TEA",
-                                    title: isChinese
-                                        ? "立即预约"
-                                        : "Book Now"
-                                }
-                            },
-                            {
-                                type: "reply",
-                                reply: {
-                                    id: "BACK_SERVICES",
-                                    title: isChinese
-                                        ? "返回服务"
-                                        : "Back to Services"
-                                }
-                            },
-                            {
-                                type: "reply",
-                                reply: {
-                                    id: "MAIN_MENU",
-                                    title: isChinese
-                                        ? "主菜单"
-                                        : "Main Menu"
-                                }
-                            }
-                        ]
-                    }
-                }
-            },
-            {
-                headers: {
-                    Authorization:
-                        `Bearer ${process.env.WHATSAPP_TOKEN}`,
-                    "Content-Type": "application/json"
-                }
-            }
-        );
-
-        console.log("Tea ceremony menu sent successfully");
-        console.log(response.data);
-
-    } catch (error) {
-        console.error(
-            "Error sending tea ceremony menu:",
-            error.response?.data || error.message
-        );
-    }
-}
 async function sendQuestionOptions(to) {
     try {
         const isChinese = getLanguage(to) === "zh";
@@ -1492,8 +1362,27 @@ async function handleFAQ(from) {
     await sendFAQMenu(from);
 }
 
-async function handleServices(from) {
-    await sendServicesMenu(from);
+
+async function handleThingsToNote(from) {
+    const isChinese = getLanguage(from) === "zh";
+
+    const message = isChinese
+        ? `注意事项：
+
+请在茶道开始前约 5–10 分钟抵达，以便签到、使用洗手间并安顿下来，避免打扰仪式进行。
+
+茶道进行期间请勿使用手机。进入茶道区域前，我们会请宾客将手机放入篮子中，以维护茶道所营造的宁静氛围。`
+        : `Things to note:
+
+Arrive about 5-10 mins before the session to check in, use the restroom and settle in without interrupting the ceremony.
+
+No phones during the session, guests will be asked to place their phones in a basket before entering the tea area, this is to preserve the calm energy that the ceremony creates.`;
+
+    await sendMessage(from, message);
+
+    await sleep(1500);
+
+    await sendMainMenu(from);
 }
 
 async function handleContact(from) {
@@ -1508,12 +1397,15 @@ async function handleContact(from) {
 }
 
 async function handleBookingDate(from, selectionId) {
+    const isChinese = getLanguage(from) === "zh";
     const date = selectionId.replace("BOOK_DATE_", "");
 
     // Only accept the date format used by your menu.
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-        await sendMessage(from, "Invalid booking date.");
-        return;
+        await sendMessage(
+            from,
+            isChinese ? "预约日期无效。" : "Invalid booking date."
+        );
     }
 
     const draft = await getDraft(from);
@@ -1521,7 +1413,9 @@ async function handleBookingDate(from, selectionId) {
     if (!draft) {
         await sendMessage(
             from,
-            "Your booking session could not be found. Please start again."
+            isChinese
+                ? "找不到您的预约记录，请重新开始预约。"
+                : "Your booking session could not be found. Please start again."
         );
         return;
     }
@@ -1603,10 +1497,14 @@ async function handleBookingPartySize(from, selectionId) {
     }
 }
 async function handleBookingTime(from, selectionId) {
+    const isChinese = getLanguage(from) === "zh";
     const time = selectionId.replace("BOOK_TIME_", "");
 
     if (!/^\d{2}:\d{2}$/.test(time)) {
-        await sendMessage(from, "Invalid booking time.");
+        await sendMessage(
+            from,
+            isChinese ? "预约时间无效。" : "Invalid booking time."
+        );
         return;
     }
 
@@ -1615,7 +1513,9 @@ async function handleBookingTime(from, selectionId) {
     if (!draft?.booking_date) {
         await sendMessage(
             from,
-            "Your booking date could not be found. Please start again."
+            isChinese
+                ? "找不到您选择的预约日期，请重新开始预约。"
+                : "Your booking date could not be found. Please start again."
         );
         return;
     }
@@ -1643,7 +1543,9 @@ async function handleBookingTime(from, selectionId) {
     if (!selectedSlot) {
         await sendMessage(
             from,
-            "That time is no longer available. Please choose another."
+            isChinese
+                ? "该时段目前无法预约，请选择其他时间。"
+                : "That time is no longer available. Please choose another."
         );
 
         await sendAvailableTimes(
@@ -1690,143 +1592,107 @@ async function handleBookingRejection(from, selectionId) {
 // FAQ HANDLERS
 // =========================
 
-async function handleFAQHours(from) {
-    const language = getLanguage(from);
-    
-    if (language === "zh") {
-        await sendMessage(
-            from,
-            "我们的营业时间是中午12点至下午5点。"
-        );
-    }
-    else {
-        await sendMessage(
-            from,
-            "Our opening hours are from 12 PM to 5 PM."
-        );
-    }
-    
+async function sendFAQAnswer(from, englishQuestion, englishAnswer,
+                             chineseQuestion, chineseAnswer) {
+    const isChinese = getLanguage(from) === "zh";
+
+    const message = isChinese
+        ? `${chineseQuestion}\n\n${chineseAnswer}`
+        : `${englishQuestion}\n\n${englishAnswer}`;
+
+    await sendMessage(from, message);
     await sendNavigationMenu(from);
 }
 
-async function handleFAQTeaCeremony(from) {
-    const language = getLanguage(from);
-    await sendImage(
+async function handleFAQExpect(from) {
+    await sendFAQAnswer(
         from,
-        images.teaCeremony
+        "What should I expect during a tea ceremony?",
+        "A tea ceremony is usually a calm, guided experience where the host prepares and serves tea while explaining the traditions, utensils, movements, and meaning behind the ceremony.",
+        "茶道体验包括什么？",
+        "茶道通常是一场宁静、由主持人引导的体验。主持人会准备并奉上茶，同时介绍茶道的传统、茶具、动作及其背后的意义。"
     );
-
-    // 2. Wait so the image appears before the text
-    await sleep(2000);
-    
-    if (language === "zh") {
-        await sendMessage(
-            from,
-            "茶道是一种以细心和尊重的态度泡茶、奉茶的传统文化习俗。它不仅仅是品茶，更体现了待客之道、专注、文化与欣赏，并通过共享品茶的体验拉近人与人之间的距离。"
-        );
-    }
-    else {
-        await sendMessage(
-            from,
-            "A tea ceremony is a traditional practice of preparing and serving tea with care and respect. It is more than simply drinking tea—it reflects hospitality, mindfulness, culture, and appreciation, bringing people together through the shared experience of tea."
-        );
-    }
-    await sleep(2000);
-
-    await sendNavigationMenu(from);
 }
 
-async function handleFAQRules(from) {
-    const language = getLanguage(from);
-    
-    if (language === "zh") {
-        await sendMessage(
-            from,
-            "茶道仪式进行期间，请将手机调至静音，并尽量避免交谈，让所有宾客都能享受体验。"
-        );
-    }
-    else {
-        await sendMessage(
-            from,
-            "During the tea ceremony, please silence your handphone and refrain from talking so everyone can enjoy the experience."
-        );
-    }
-    
-    await sendNavigationMenu(from);
-}
-
-async function handleFAQLeaves(from) {
-    const isChinese = getLanguage(from) === "zh";
-    
-    await sendMessage(
+async function handleFAQDuration(from) {
+    await sendFAQAnswer(
         from,
-        isChinese
-        ? "这里填写有关茶叶的中文答案。"
-        : "YOUR TEA LEAVES ANSWER HERE"
+        "How long does the tea ceremony take?",
+        "The experiences last around 30 minutes",
+        "茶道体验需要多长时间？",
+        "体验时间约为 30 分钟。"
     );
-    
-    await sendNavigationMenu(from);
 }
 
-async function handleFAQTeaPrices(from) {
-    const isChinese = getLanguage(from) === "zh";
-
-    await sendImage(
+async function handleFAQBeginner(from) {
+    await sendFAQAnswer(
         from,
-        images.ceremonyPrices,
-        isChinese
-            ? "查看我们的配套优惠，与亲朋好友一起分享这份体验。"
-            : "Check out our package deals to share the experience"
+        "Do I need to know anything about tea beforehand?",
+        "Not at all! Tea ceremonies are designed to be enjoyed by beginners. Your host will guide you through the experience and explain anything you need to know.",
+        "需要事先了解茶知识吗？",
+        "完全不需要！茶道体验也适合初学者。主持人会全程引导，并为您讲解所需了解的内容。"
     );
-    await sleep(2000);
-
-    await sendNavigationMenu(from);
 }
 
-
-// =========================
-// SERVICE HANDLERS
-// =========================
-
-async function handleServiceTea(from) {
-    const isChinese = getLanguage(from) === "zh";
-    
-    await sendMessage(
+async function handleFAQBring(from) {
+    await sendFAQAnswer(
         from,
-        isChinese
-        ? "茶道体验\n\n体验我们的传统茶道。"
-        : "Tea Ceremony\n\nExperience our traditional tea ceremony."
+        "Do I need to bring anything?",
+        "We only ask that you bring an open mind with the intent to disconnect from a hectic life.",
+        "需要携带什么吗？",
+        "您只需要带着开放的心态前来，暂时放下忙碌的生活，享受当下。"
     );
-    
-    await sendServicesNavigation(from);
 }
 
-async function handleServiceWater(from) {
-    const isChinese = getLanguage(from) === "zh";
-    
-    await sendMessage(
+async function handleFAQWear(from) {
+    await sendFAQAnswer(
         from,
-        isChinese
-        ? "我们的冰川水来自中国。"
-        : "Our glacial water is sourced from China."
+        "What should I wear?",
+        "Loose or comfortable clothing will make the experience more enjoyable. Avoid anything that may make sitting or moving around uncomfortable.",
+        "应该穿什么？",
+        "宽松或舒适的衣物能让体验更加愉快。请避免穿着可能令您坐下或活动时感到不适的服装。"
     );
-    
-    await sendServicesNavigation(from);
 }
 
-async function handleServiceMuseum(from) {
-    const isChinese = getLanguage(from) === "zh";
-    
-    await sendMessage(
+async function handleFAQChildren(from) {
+    await sendFAQAnswer(
         from,
-        isChinese
-        ? "博物馆导览\n\n通过我们的导览服务，更深入地了解博物馆。"
-        : "Museum Tour\n\nLearn more about our museum through our guided tour."
+        "Can children attend?",
+        "Yes.",
+        "儿童可以参加吗？",
+        "可以。"
     );
-    
-    await sendServicesNavigation(from);
 }
 
+async function handleFAQCaffeine(from) {
+    await sendFAQAnswer(
+        from,
+        "Does the tea contain caffeine?",
+        "No.",
+        "茶含有咖啡因吗？",
+        "不含。"
+    );
+}
+
+async function handleFAQChange(from) {
+    await sendFAQAnswer(
+        from,
+        "Can I cancel or change my booking?",
+        "Yes, please contact staff by sending a message to this number with your request for change.",
+        "可以取消或更改预约吗？",
+        "可以。请发送消息至此号码，向工作人员提出您的更改或取消预约请求。"
+    );
+}
+
+async function handleFAQLate(from) {
+    await sendFAQAnswer(
+        from,
+        "What if I am late to my booking?",
+        "Please contact our staff for assistance. [REPLACE WITH YOUR ACTUAL LATENESS POLICY]",
+        "如果预约迟到了怎么办？",
+        "请联系工作人员寻求协助。[请替换为实际的迟到处理规定]"
+    );
+}
 
 // =========================
 // NAVIGATION HANDLERS
@@ -1834,10 +1700,6 @@ async function handleServiceMuseum(from) {
 
 async function handleBackFAQ(from) {
     await sendFAQMenu(from);
-}
-
-async function handleBackServices(from) {
-    await sendServicesMenu(from);
 }
 
 async function handleMainMenu(from) {
@@ -2069,8 +1931,23 @@ async function handleInteractiveMessage(from, message) {
         console.log("No handler found for:", selectionId);
     }
 }
+
+function requireValidMetaSignature(req, res, next) {
+    if (!verifyMetaWebhookSignature(req)) {
+        console.warn(
+            "Rejected webhook: invalid or missing Meta signature"
+        );
+
+        return res.sendStatus(401);
+    }
+
+    next();
+}
 //POST
-app.post("/webhook", async (req, res) => {
+app.post(
+    "/webhook",
+    requireValidMetaSignature,
+    async (req, res) => {
 
     try {
         const value = req.body.entry?.[0]?.changes?.[0]?.value;
