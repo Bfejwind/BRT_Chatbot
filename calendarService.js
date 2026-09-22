@@ -35,8 +35,21 @@ function getSessionCalendarEventId(sessionId) {
 
     return `booking${normalizedId}`;
 }
+
+const googleCredentials = process.env.GOOGLE_CREDENTIALS_JSON
+    ? JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON)
+    : undefined;
+
+if (process.env.RENDER && !googleCredentials) {
+    throw new Error(
+        "GOOGLE_CREDENTIALS_JSON is missing from Render environment variables"
+    );
+}
+
 const auth = new google.auth.GoogleAuth({
-    keyFile: "google-service-account.json",
+    ...(googleCredentials
+        ? { credentials: googleCredentials }
+        : { keyFile: "google-service-account.json" }),
     scopes: [
         "https://www.googleapis.com/auth/calendar"
     ]
