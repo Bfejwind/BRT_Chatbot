@@ -97,6 +97,130 @@ app.get("/health", (req, res) => {
     res.status(200).json({ status: "ok" });
 });
 
+// Phase 5/6: Embedded Signup landing page.
+// This is the exact URL entered as the Valid OAuth Redirect URI
+// and covered by the Allowed Domain in Facebook Login for Business settings.
+app.get("/connect-whatsapp", (req, res) => {
+    res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Connect WhatsApp</title>
+        </head>
+        <body>
+            <h1>Connect your WhatsApp number</h1>
+            <button id="launch-signup">Connect WhatsApp</button>
+            <p id="status"></p>
+
+            <script>
+                window.fbAsyncInit = function () {
+                    FB.init({
+                        appId: "${process.env.FACEBOOK_APP_ID}",
+                        autoLogAppEvents: true,
+                        xfbml: true,
+                        version: "v21.0"
+                    });
+                };
+            </script>
+            <script async defer crossorigin="anonymous"
+                src="https://connect.facebook.net/en_US/sdk.js">
+            </script>
+
+            <script>
+                document.getElementById("launch-signup").onclick = function () {
+                    const statusEl = document.getElementById("status");
+                    statusEl.textContent = "Opening WhatsApp signup...";
+
+                    FB.login(function (response) {
+                        if (response.authResponse && response.authResponse.code) {
+                            statusEl.textContent = "Finishing setup...";
+
+                            fetch("/whatsapp-signup/exchange", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                    code: response.authResponse.code
+                                })
+                            })
+                                .then(res => res.json())
+                                .then(data => {
+                                    statusEl.textContent = data.success
+                                        ? "WhatsApp connected successfully."
+                                        : "Setup failed: " + (data.error || "unknown error");
+                                })
+                                .catch(err => {
+                                    statusEl.textContent = "Setup failed: " + err.message;
+                                });
+                        } else {
+                            statusEl.textContent = "Signup was cancelled or did not complete.";
+                        }
+                    }, {
+                        config_id: "${process.env.EMBEDDED_SIGNUP_CONFIG_ID}",
+                        response_type: "code",
+                        override_default_response_type: true,
+                        extras: {
+                            version: "v3",
+                            setup: {},
+                            featureType: "whatsapp_business_app_onboarding"
+                        }
+                    });
+                };
+            </script>
+        </body>
+        </html>
+    `);
+});
+
+// Phase 7: Exchanges the Embedded Signup "code" for a token,
+// then completes onboarding for the returned WABA/phone number.
+// NOTE: this is scaffolding for Phase 7 — the actual onboarding API
+// calls (registering the number, subscribing the app to the WABA)
+// still need to be filled in once you reach that phase and have
+// a WABA ID / phone number ID coming back from Meta to test against.
+app.post("/whatsapp-signup/exchange", async (req, res) => {
+    const { code } = req.body;
+
+    if (!code) {
+        return res.status(400).json({ success: false, error: "Missing code" });
+    }
+
+    try {
+        const tokenResponse = await axios.get(
+            "https://graph.facebook.com/v21.0/oauth/access_token",
+            {
+                params: {
+                    client_id: process.env.FACEBOOK_APP_ID,
+                    client_secret: process.env.META_APP_SECRET,
+                    code
+                }
+            }
+        );
+
+        const accessToken = tokenResponse.data.access_token;
+
+        // TODO (Phase 7): use accessToken to call the debug_token
+        // endpoint to retrieve the granular_scopes, which contain
+        // the new WABA ID and phone number ID Meta just created,
+        // then call the register/onboarding endpoints for that number.
+
+        console.log("Embedded Signup token exchange succeeded.");
+
+        res.json({ success: true });
+
+    } catch (error) {
+        console.error(
+            "Embedded Signup token exchange failed:",
+            error.response?.data || error.message
+        );
+
+        res.status(500).json({
+            success: false,
+            error: "Token exchange failed"
+        });
+    }
+});
+
 function verifyMetaWebhookSignature(req) {
     const appSecret = process.env.META_APP_SECRET;
     const signature = req.get("X-Hub-Signature-256");
