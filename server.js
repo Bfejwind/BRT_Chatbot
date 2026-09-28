@@ -92,8 +92,8 @@ const PORT = process.env.PORT || 3000;
 // Public landing page. Meta's app review asks for a website that shows
 // the service and the business providing it. EDIT the SITE constants below.
 const SITE = {
-    businessName: "[X Corp Edutech]",
-    contactEmail: "[officiallyrichard@gmail.com]",
+    businessName: "[X Corp Edutech Pte.Ltd.]",
+    contactEmail: "[h3lldragon@hotmail.com]",
     location: "[Singapore,Singapore]"
 };
 
