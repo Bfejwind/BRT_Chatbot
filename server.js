@@ -89,8 +89,56 @@ app.use(express.json({
 
 const PORT = process.env.PORT || 3000;
 
+// Public landing page. Meta's app review asks for a website that shows
+// the service and the business providing it. EDIT the SITE constants below.
+const SITE = {
+    businessName: "[X Corp Edutech]",
+    contactEmail: "[officiallyrichard@gmail.com]",
+    location: "[Singapore,Singapore]"
+};
+
 app.get("/", (req, res) => {
-    res.send("WhatsApp bot is running");
+    res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${SITE.businessName} - WhatsApp Booking Assistant</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; line-height: 1.6; color: #222; }
+        h1, h2 { margin-top: 32px; }
+        footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid #ddd; font-size: 14px; color: #555; }
+    </style>
+</head>
+<body>
+    <h1>WhatsApp Booking Assistant</h1>
+    <p>${SITE.businessName} provides an automated WhatsApp assistant for small businesses. It answers customers' common questions and takes bookings through WhatsApp, at any time of day.</p>
+
+    <h2>How it works</h2>
+    <ol>
+        <li>A customer sends a message to the business's WhatsApp number.</li>
+        <li>The assistant replies with a menu and answers common questions about the business.</li>
+        <li>To book, the customer chooses a date, a time and the number of guests.</li>
+        <li>The booking is confirmed in the chat and added to the business's calendar.</li>
+        <li>If the assistant cannot answer something, the message is passed to the business's staff to follow up.</li>
+    </ol>
+
+    <h2>Who uses it</h2>
+    <p>Businesses that take bookings, such as tea ceremony sessions, workshops and tours, use the assistant so that staff do not need to reply to every message, and can see all bookings in one calendar.</p>
+
+    <h2>Your data</h2>
+    <p>We use the customer's WhatsApp phone number and messages only to reply, manage the booking and pass questions to staff. We do not sell this data or use it for advertising. See our <a href="/privacy">Privacy Policy</a>.</p>
+
+    <h2>Contact</h2>
+    <p>${SITE.businessName}<br>${SITE.location}<br>Email: ${SITE.contactEmail}</p>
+
+    <footer>&copy; ${new Date().getFullYear()} ${SITE.businessName}. <a href="/privacy">Privacy Policy</a></footer>
+</body>
+</html>`);
+});
+
+app.get("/privacy", (req, res) => {
+    res.sendFile(require("path").join(__dirname, "privacy.html"));
 });
 
 app.get("/health", (req, res) => {
