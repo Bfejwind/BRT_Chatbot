@@ -2,6 +2,8 @@ require("dotenv").config();
 
 const express = require("express");
 const axios = require("axios");
+const { readFile } = require("node:fs/promises");
+const path = require("node:path");
 const {
     claimMessage,
     completeMessage,
@@ -29,23 +31,23 @@ const interactionHandlers = {
     BOOK_CONFIRM: handleBookingConfirm,
     BOOK_CANCEL: handleBookingCancel,
 
-    // FAQ
-    FAQ_EXPECT: handleFAQExpect,
-    FAQ_DURATION: handleFAQDuration,
-    FAQ_BEGINNER: handleFAQBeginner,
-    FAQ_BRING: handleFAQBring,
-    FAQ_WEAR: handleFAQWear,
-    FAQ_CHILDREN: handleFAQChildren,
-    FAQ_CAFFEINE: handleFAQCaffeine,
-    FAQ_CHANGE: handleFAQChange,
-    FAQ_LATE: handleFAQLate,
+    // Support FAQ options in messages sent before the PDF replaced the menu.
+    FAQ_EXPECT: handleFAQ,
+    FAQ_DURATION: handleFAQ,
+    FAQ_BEGINNER: handleFAQ,
+    FAQ_BRING: handleFAQ,
+    FAQ_WEAR: handleFAQ,
+    FAQ_CHILDREN: handleFAQ,
+    FAQ_CAFFEINE: handleFAQ,
+    FAQ_CHANGE: handleFAQ,
+    FAQ_LATE: handleFAQ,
 
     // Navigation
-    BACK_FAQ: handleBackFAQ,
+    BACK_FAQ: handleFAQ,
     MAIN_MENU: handleMainMenu,
 
     // Question handling
-    QUESTION_FAQ: handleQuestionFAQ,
+    QUESTION_FAQ: handleFAQ,
     QUESTION_STAFF: handleQuestionStaff
 };
 const images = {
@@ -551,139 +553,34 @@ async function sendMainMenu(to) {
     }
 }
 
-async function sendFAQMenu(to) {
-    try {
-        const isChinese = getLanguage(to) === "zh";
+async function sendFAQDocument(to) {
+    const pdf = await readFile(path.join(__dirname, "FAQ", "FAQ.pdf"));
+    const form = new FormData();
+    form.append("messaging_product", "whatsapp");
+    form.append("type", "application/pdf");
+    form.append("file", new Blob([pdf], { type: "application/pdf" }), "FAQ.pdf");
 
-        const faqs = [
-            {
-                id: "FAQ_EXPECT",
-                en: "What should I expect during a tea ceremony?",
-                zh: "茶道体验包括什么？"
-            },
-            {
-                id: "FAQ_DURATION",
-                en: "How long does the tea ceremony take?",
-                zh: "茶道体验需要多长时间？"
-            },
-            {
-                id: "FAQ_BEGINNER",
-                en: "Do I need to know anything about tea beforehand?",
-                zh: "需要事先了解茶知识吗？"
-            },
-            {
-                id: "FAQ_BRING",
-                en: "Do I need to bring anything?",
-                zh: "需要携带什么吗？"
-            },
-            {
-                id: "FAQ_WEAR",
-                en: "What should I wear?",
-                zh: "应该穿什么？"
-            },
-            {
-                id: "FAQ_CHILDREN",
-                en: "Can children attend?",
-                zh: "儿童可以参加吗？"
-            },
-            {
-                id: "FAQ_CAFFEINE",
-                en: "Does the tea have caffeine?",
-                zh: "茶含有咖啡因吗？"
-            },
-            {
-                id: "FAQ_CHANGE",
-                en: "Can I cancel or change my booking?",
-                zh: "可以取消或更改预约吗？"
-            },
-            {
-                id: "FAQ_LATE",
-                en: "What if I am late to my booking?",
-                zh: "如果预约迟到了怎么办？"
-            }
-        ];
+    const baseUrl = `https://graph.facebook.com/v26.0/${process.env.PHONE_NUMBER_ID}`;
+    const headers = {
+        Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`
+    };
+    const upload = await axios.post(`${baseUrl}/media`, form, { headers });
+    const mediaId = upload.data?.id;
 
-        // WhatsApp list-row titles have a 24-character limit.
-        // Display shortened titles while retaining full questions below.
-        const shortTitles = {
-            FAQ_EXPECT: ["What to expect?", "体验内容"],
-            FAQ_DURATION: ["How long is it?", "体验时长"],
-            FAQ_BEGINNER: ["Tea knowledge needed?", "需要茶知识吗？"],
-            FAQ_BRING: ["What should I bring?", "需要携带什么？"],
-            FAQ_WEAR: ["What should I wear?", "应该穿什么？"],
-            FAQ_CHILDREN: ["Can children attend?", "儿童可以参加吗？"],
-            FAQ_CAFFEINE: ["Does tea have caffeine?", "茶含咖啡因吗？"],
-            FAQ_CHANGE: ["Change or cancel?", "更改或取消预约？"],
-            FAQ_LATE: ["What if I'm late?", "如果迟到了？"]
-        };
-
-        const rows = faqs.map(faq => {
-            const title = isChinese
-                ? shortTitles[faq.id][1]
-                : shortTitles[faq.id][0];
-
-            const fullQuestion = isChinese ? faq.zh : faq.en;
-
-            return {
-                id: faq.id,
-                title,
-                // Only show a description when it adds different text.
-                ...(title === fullQuestion
-                    ? {}
-                    : { description: fullQuestion })
-            };
-        });
-
-        await axios.post(
-            `https://graph.facebook.com/v26.0/${process.env.PHONE_NUMBER_ID}/messages`,
-            {
-                messaging_product: "whatsapp",
-                to,
-                type: "interactive",
-                interactive: {
-                    type: "list",
-                    header: {
-                        type: "text",
-                        text: isChinese
-                            ? "常见问题"
-                            : "Frequently Asked Questions"
-                    },
-                    body: {
-                        text: isChinese
-                            ? "请选择您想了解的问题："
-                            : "Please select a question:"
-                    },
-                    action: {
-                        button: isChinese
-                            ? "查看问题"
-                            : "View Questions",
-                        sections: [
-                            {
-                                title: isChinese
-                                    ? "常见问题"
-                                    : "FAQs",
-                                rows
-                            }
-                        ]
-                    }
-                }
-            },
-            {
-                headers: {
-                    Authorization:
-                        `Bearer ${process.env.WHATSAPP_TOKEN}`,
-                    "Content-Type": "application/json"
-                }
-            }
-        );
-
-        console.log("FAQ menu sent successfully");
-    } catch (error) {
-        console.error(
-            "Error sending FAQ menu:",
-            error.response?.data || error.message
-        );
+    if (!mediaId) {
+        throw new Error("FAQ PDF upload did not return a media ID");
     }
+
+    // Let failures reach the webhook so an unsuccessful delivery can be retried.
+    await axios.post(`${baseUrl}/messages`, {
+        messaging_product: "whatsapp",
+        to,
+        type: "document",
+        document: {
+            id: mediaId,
+            filename: "FAQ.pdf"
+        }
+    }, { headers });
 }
 
 async function handleBooking(from) {
@@ -1244,66 +1141,6 @@ async function sendBookingRequestToStaff(customerPhone, booking) {
         );
     }
 }
-async function sendNavigationMenu(to) {
-    try {
-        const isChinese = getLanguage(to) === "zh";
-
-        const response = await axios.post(
-            `https://graph.facebook.com/v26.0/${process.env.PHONE_NUMBER_ID}/messages`,
-            {
-                messaging_product: "whatsapp",
-                to: to,
-                type: "interactive",
-                interactive: {
-                    type: "button",
-                    body: {
-                        text: isChinese
-                            ? "您还想了解其他内容吗？"
-                            : "Would you like to see anything else?"
-                    },
-                    action: {
-                        buttons: [
-                            {
-                                type: "reply",
-                                reply: {
-                                    id: "BACK_FAQ",
-                                    title: isChinese
-                                        ? "返回常见问题"
-                                        : "Back to FAQ"
-                                }
-                            },
-                            {
-                                type: "reply",
-                                reply: {
-                                    id: "MAIN_MENU",
-                                    title: isChinese
-                                        ? "主菜单"
-                                        : "Main Menu"
-                                }
-                            }
-                        ]
-                    }
-                }
-            },
-            {
-                headers: {
-                    Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
-                    "Content-Type": "application/json"
-                }
-            }
-        );
-
-        console.log("Navigation menu sent successfully");
-        console.log(response.data);
-
-    } catch (error) {
-        console.error(
-            "Error sending navigation menu:",
-            error.response?.data || error.message
-        );
-    }
-}
-
 async function sendContactNavigation(to) {
     try {
         const isChinese = getLanguage(to) === "zh";
@@ -1353,73 +1190,7 @@ async function sendContactNavigation(to) {
     }
 }
 
-async function sendQuestionOptions(to) {
-    try {
-        const isChinese = getLanguage(to) === "zh";
 
-        await axios.post(
-            `https://graph.facebook.com/v26.0/${process.env.PHONE_NUMBER_ID}/messages`,
-            {
-                messaging_product: "whatsapp",
-                to: to,
-                type: "interactive",
-                interactive: {
-                    type: "button",
-                    body: {
-                        text: isChinese
-                            ? "您的问题可能已经在常见问题中得到解答。您想先查看常见问题吗？"
-                            : "Your question may already be answered in our FAQ. " +
-                              "Would you like to check the FAQ first?"
-                    },
-                    action: {
-                        buttons: [
-                            {
-                                type: "reply",
-                                reply: {
-                                    id: "QUESTION_FAQ",
-                                    title: isChinese
-                                        ? "查看常见问题"
-                                        : "Check FAQ"
-                                }
-                            },
-                            {
-                                type: "reply",
-                                reply: {
-                                    id: "QUESTION_STAFF",
-                                    title: isChinese
-                                        ? "联系工作人员"
-                                        : "Contact Staff"
-                                }
-                            },
-                            {
-                                type: "reply",
-                                reply: {
-                                    id: "MAIN_MENU",
-                                    title: isChinese
-                                        ? "主菜单"
-                                        : "Main Menu"
-                                }
-                            }
-                        ]
-                    }
-                }
-            },
-            {
-                headers: {
-                    Authorization:
-                        `Bearer ${process.env.WHATSAPP_TOKEN}`,
-                    "Content-Type": "application/json"
-                }
-            }
-        );
-
-    } catch (error) {
-        console.error(
-            "Error sending question options:",
-            error.response?.data || error.message
-        );
-    }
-}
 async function notifyStaff(customerNumber, customerMessage) {
     try {
         const customerLanguage =
@@ -1453,7 +1224,7 @@ async function notifyStaff(customerNumber, customerMessage) {
 // =========================
 
 async function handleFAQ(from) {
-    await sendFAQMenu(from);
+    await sendFAQDocument(from);
 }
 
 
@@ -1682,120 +1453,6 @@ async function handleBookingRejection(from, selectionId) {
 }
 
 
-// =========================
-// FAQ HANDLERS
-// =========================
-
-async function sendFAQAnswer(from, englishQuestion, englishAnswer,
-                             chineseQuestion, chineseAnswer) {
-    const isChinese = getLanguage(from) === "zh";
-
-    const message = isChinese
-        ? `${chineseQuestion}\n\n${chineseAnswer}`
-        : `${englishQuestion}\n\n${englishAnswer}`;
-
-    await sendMessage(from, message);
-    await sendNavigationMenu(from);
-}
-
-async function handleFAQExpect(from) {
-    await sendFAQAnswer(
-        from,
-        "What should I expect during a tea ceremony?",
-        "A tea ceremony is usually a calm, guided experience where the host prepares and serves tea while explaining the traditions, utensils, movements, and meaning behind the ceremony.",
-        "茶道体验包括什么？",
-        "茶道通常是一场宁静、由主持人引导的体验。主持人会准备并奉上茶，同时介绍茶道的传统、茶具、动作及其背后的意义。"
-    );
-}
-
-async function handleFAQDuration(from) {
-    await sendFAQAnswer(
-        from,
-        "How long does the tea ceremony take?",
-        "The experiences last around 30 minutes",
-        "茶道体验需要多长时间？",
-        "体验时间约为 30 分钟。"
-    );
-}
-
-async function handleFAQBeginner(from) {
-    await sendFAQAnswer(
-        from,
-        "Do I need to know anything about tea beforehand?",
-        "Not at all! Tea ceremonies are designed to be enjoyed by beginners. Your host will guide you through the experience and explain anything you need to know.",
-        "需要事先了解茶知识吗？",
-        "完全不需要！茶道体验也适合初学者。主持人会全程引导，并为您讲解所需了解的内容。"
-    );
-}
-
-async function handleFAQBring(from) {
-    await sendFAQAnswer(
-        from,
-        "Do I need to bring anything?",
-        "We only ask that you bring an open mind with the intent to disconnect from a hectic life.",
-        "需要携带什么吗？",
-        "您只需要带着开放的心态前来，暂时放下忙碌的生活，享受当下。"
-    );
-}
-
-async function handleFAQWear(from) {
-    await sendFAQAnswer(
-        from,
-        "What should I wear?",
-        "Loose or comfortable clothing will make the experience more enjoyable. Avoid anything that may make sitting or moving around uncomfortable.",
-        "应该穿什么？",
-        "宽松或舒适的衣物能让体验更加愉快。请避免穿着可能令您坐下或活动时感到不适的服装。"
-    );
-}
-
-async function handleFAQChildren(from) {
-    await sendFAQAnswer(
-        from,
-        "Can children attend?",
-        "Yes.",
-        "儿童可以参加吗？",
-        "可以。"
-    );
-}
-
-async function handleFAQCaffeine(from) {
-    await sendFAQAnswer(
-        from,
-        "Does the tea contain caffeine?",
-        "No.",
-        "茶含有咖啡因吗？",
-        "不含。"
-    );
-}
-
-async function handleFAQChange(from) {
-    await sendFAQAnswer(
-        from,
-        "Can I cancel or change my booking?",
-        "Yes, please contact staff by sending a message to this number with your request for change.",
-        "可以取消或更改预约吗？",
-        "可以。请发送消息至此号码，向工作人员提出您的更改或取消预约请求。"
-    );
-}
-
-async function handleFAQLate(from) {
-    await sendFAQAnswer(
-        from,
-        "What if I am late to my booking?",
-        "Please contact our staff for assistance. [REPLACE WITH YOUR ACTUAL LATENESS POLICY]",
-        "如果预约迟到了怎么办？",
-        "请联系工作人员寻求协助。[请替换为实际的迟到处理规定]"
-    );
-}
-
-// =========================
-// NAVIGATION HANDLERS
-// =========================
-
-async function handleBackFAQ(from) {
-    await sendFAQMenu(from);
-}
-
 async function handleMainMenu(from) {
     await sendMainMenu(from);
 }
@@ -1804,10 +1461,6 @@ async function handleMainMenu(from) {
 // =========================
 // QUESTION HANDLERS
 // =========================
-
-async function handleQuestionFAQ(from) {
-    await sendFAQMenu(from);
-}
 
 async function handleQuestionStaff(from) {
     const originalQuestion = pendingQuestions[from];
