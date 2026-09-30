@@ -481,8 +481,8 @@ async function sendMainMenu(to) {
 
                     body: {
                         text: isChinese
-                            ? "请选择一个选项："
-                            : "Please select an option:"
+                            ? "请选择一个选项：\n发送“hi”或“hello”可返回语言选择。发送问题会转给工作人员，发送“Booking”可进入预约菜单。"
+                            : "Please select an option:\nSend “hi” or “hello” to return to language selection. Send a question to reach a staff member, or send “Booking” to open the booking menu."
                     },
 
                     action: {
@@ -1830,6 +1830,11 @@ async function handleTextMessage(from, message) {
     const language = getLanguage(from);
     const isChinese = language === "zh";
 
+    if (!userLanguages[from]) {
+        await sendLanguageMenu(from);
+        return;
+    }
+
     // English greetings
     const englishGreetings = [
         "hi",
@@ -1857,6 +1862,11 @@ async function handleTextMessage(from, message) {
         .toLowerCase()
         .replace(/[.,!?:;'"()]/g, "")
         .trim();
+
+    if (normalizedText === "booking") {
+        await handleBooking(from);
+        return;
+    }
 
     // English closing messages
     const englishClosingMessages = [
@@ -1899,13 +1909,11 @@ async function handleTextMessage(from, message) {
         "拜拜"
     ];
 
-    // Check English greeting
     const containsEnglishGreeting = englishGreetings.some(greeting => {
         const regex = new RegExp(`\\b${greeting}\\b`, "i");
         return regex.test(text);
     });
 
-    // Check Chinese greeting
     const containsChineseGreeting = chineseGreetings.some(greeting => {
         return text.includes(greeting);
     });
@@ -1923,13 +1931,7 @@ async function handleTextMessage(from, message) {
     // 1. Greeting
     // -----------------------------
     if (containsGreeting) {
-        if (!userLanguages[from]) {
-            await sendLanguageMenu(from);
-        }
-        else {
-            await sendMainMenu(from);
-        }
-
+        await sendLanguageMenu(from);
         return;
     }
 
@@ -1960,9 +1962,16 @@ async function handleTextMessage(from, message) {
     // 3. Question
     // -----------------------------
     if (containsQuestion) {
-        pendingQuestions[from] = text;
+        await notifyStaff(from, text);
 
-        await sendQuestionOptions(from);
+        await sendMessage(
+            from,
+            isChinese
+                ? "感谢您的问题。工作人员已收到通知，并会尽快回复您。"
+                : "Thanks for your question. A staff member has been notified and will get back to you as soon as possible."
+        );
+
+        await sendContactNavigation(from);
 
         return;
     }
