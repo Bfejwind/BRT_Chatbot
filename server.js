@@ -588,39 +588,52 @@ async function handleBooking(from) {
 
     await sendAvailableDates(from);
 }
-async function sendAvailableDates(to) {
+function getBookingDates(now = new Date()) {
+    const today = now.toLocaleDateString("en-CA", { timeZone: "Asia/Singapore" });
+    const start = new Date(`${today}T00:00:00Z`);
+    const lastDayNextMonth = new Date(Date.UTC(
+        start.getUTCFullYear(), start.getUTCMonth() + 2, 0
+    )).getUTCDate();
+    const end = new Date(Date.UTC(
+        start.getUTCFullYear(), start.getUTCMonth() + 1,
+        Math.min(start.getUTCDate(), lastDayNextMonth)
+    ));
+    const dates = [];
+    for (const date = new Date(start); date < end;) {
+        date.setUTCDate(date.getUTCDate() + 1);
+        dates.push(date.toISOString().slice(0, 10));
+    }
+    return dates;
+}
+
+async function sendAvailableDates(to, page = 0) {
     try {
         const isChinese = getLanguage(to) === "zh";
-
-        const rows = [];
-
-        for (let i = 1; i <= 7; i++) {
-            const date = new Date();
-
-            date.setDate(date.getDate() + i);
-
-            // Keep this value in YYYY-MM-DD because your code uses it internally
-            const dateString = date.toLocaleDateString(
-                "en-CA",
-                {
-                    timeZone: "Asia/Singapore"
-                }
-            );
-
-            // Only change what the customer sees
-            const displayDate = date.toLocaleDateString(
-                isChinese ? "zh-CN" : "en-SG",
-                {
-                    timeZone: "Asia/Singapore",
-                    weekday: "short",
-                    day: "numeric",
-                    month: "short"
-                }
-            );
-
+        const dates = getBookingDates();
+        // Eight dates leave room for both navigation rows in a ten-row list.
+        const pageSize = 8;
+        const lastPage = Math.ceil(dates.length / pageSize) - 1;
+        if (!Number.isInteger(page) || page < 0 || page > lastPage) {
+            page = 0;
+        }
+        const rows = dates.slice(page * pageSize, (page + 1) * pageSize)
+            .map(date => ({
+                id: `BOOK_DATE_${date}`,
+                title: new Date(`${date}T00:00:00Z`).toLocaleDateString(
+                    isChinese ? "zh-CN" : "en-SG",
+                    { timeZone: "UTC", weekday: "short", day: "numeric", month: "short" }
+                )
+            }));
+        if (page > 0) {
             rows.push({
-                id: `BOOK_DATE_${dateString}`,
-                title: displayDate
+                id: `BOOK_DATES_PAGE_${page - 1}`,
+                title: isChinese ? "上一页" : "Previous dates"
+            });
+        }
+        if (page < lastPage) {
+            rows.push({
+                id: `BOOK_DATES_PAGE_${page + 1}`,
+                title: isChinese ? "下一页" : "Next dates"
             });
         }
 
@@ -634,8 +647,8 @@ async function sendAvailableDates(to) {
                     type: "list",
                     body: {
                         text: isChinese
-                            ? "请选择预约日期。"
-                            : "Please choose a booking date."
+                            ? `请选择预约日期（可提前一个月预约）。第 ${page + 1}/${lastPage + 1} 页。`
+                            : `Choose a date up to one month ahead. Page ${page + 1}/${lastPage + 1}.`
                     },
                     action: {
                         button: isChinese
@@ -670,6 +683,9 @@ async function sendAvailableDates(to) {
     }
 }
 async function getBookableSlots(date, partySize = 1) {
+    if (!getBookingDates().includes(date)) {
+        return [];
+    }
     const sessions = await getSessionAvailability(date);
 
     const slots = [];
@@ -944,6 +960,17 @@ async function handleBookingConfirm(from) {
                     ? "找不到完整的预约信息，请重新开始预约。"
                     : "Your booking details are incomplete. Please start again."
             );
+            return;
+        }
+
+        if (!getBookingDates().includes(draft.booking_date)) {
+            await sendMessage(
+                from,
+                isChinese
+                    ? "预约日期已失效，请重新选择日期。"
+                    : "That booking date is no longer available. Please choose a new date."
+            );
+            await sendAvailableDates(from);
             return;
         }
 
@@ -1265,12 +1292,13 @@ async function handleBookingDate(from, selectionId) {
     const isChinese = getLanguage(from) === "zh";
     const date = selectionId.replace("BOOK_DATE_", "");
 
-    // Only accept the date format used by your menu.
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    if (!getBookingDates().includes(date)) {
         await sendMessage(
             from,
             isChinese ? "预约日期无效。" : "Invalid booking date."
         );
+        await sendAvailableDates(from);
+        return;
     }
 
     const draft = await getDraft(from);
@@ -1666,6 +1694,12 @@ async function handleInteractiveMessage(from, message) {
 
     if (selectionId.startsWith("BOOK_SIZE_")) {
         await handleBookingPartySize(from, selectionId);
+        return;
+    }
+
+    if (selectionId.startsWith("BOOK_DATES_PAGE_")) {
+        const page = selectionId.slice("BOOK_DATES_PAGE_".length);
+        await sendAvailableDates(from, /^\d+$/.test(page) ? Number(page) : 0);
         return;
     }
 
