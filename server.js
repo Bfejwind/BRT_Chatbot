@@ -612,7 +612,7 @@ async function sendFAQMenu(to) {
             FAQ_BRING: ["What should I bring?", "需要携带什么？"],
             FAQ_WEAR: ["What should I wear?", "应该穿什么？"],
             FAQ_CHILDREN: ["Can children attend?", "儿童可以参加吗？"],
-            FAQ_CAFFEINE: ["Does the tea have caffeine?", "茶含咖啡因吗？"],
+            FAQ_CAFFEINE: ["Does tea have caffeine?", "茶含咖啡因吗？"],
             FAQ_CHANGE: ["Change or cancel?", "更改或取消预约？"],
             FAQ_LATE: ["What if I'm late?", "如果迟到了？"]
         };
