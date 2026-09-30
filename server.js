@@ -57,7 +57,12 @@ const images = {
 
     ceremonyPrices:
         "https://ixjmzksmazysazlyoxne.supabase.co/storage/v1/object/public/chatbot-images/CeremonyPrices.jpg",
-
+    thingsToNoteimg:
+        "https://ixjmzksmazysazlyoxne.supabase.co/storage/v1/object/public/chatbot-images/thingstonote.png",
+    bannerLight:
+        "https://ixjmzksmazysazlyoxne.supabase.co/storage/v1/object/public/chatbot-images/bannerLight.png",
+    bannerDark:
+        "https://ixjmzksmazysazlyoxne.supabase.co/storage/v1/object/public/chatbot-images/bannerDark.png"
 };
 const {
     getDraft,
@@ -583,7 +588,7 @@ async function sendFAQMenu(to) {
             },
             {
                 id: "FAQ_CAFFEINE",
-                en: "Does the tea contain caffeine?",
+                en: "Does the tea have caffeine?",
                 zh: "茶含有咖啡因吗？"
             },
             {
@@ -607,7 +612,7 @@ async function sendFAQMenu(to) {
             FAQ_BRING: ["What should I bring?", "需要携带什么？"],
             FAQ_WEAR: ["What should I wear?", "应该穿什么？"],
             FAQ_CHILDREN: ["Can children attend?", "儿童可以参加吗？"],
-            FAQ_CAFFEINE: ["Does tea have caffeine?", "茶含咖啡因吗？"],
+            FAQ_CAFFEINE: ["Does the tea have caffeine?", "茶含咖啡因吗？"],
             FAQ_CHANGE: ["Change or cancel?", "更改或取消预约？"],
             FAQ_LATE: ["What if I'm late?", "如果迟到了？"]
         };
@@ -1467,7 +1472,7 @@ Arrive about 5-10 mins before the session to check in, use the restroom and sett
 
 No phones during the session, guests will be asked to place their phones in a basket before entering the tea area, this is to preserve the calm energy that the ceremony creates.`;
 
-    await sendMessage(from, message);
+    await sendImage(from, images.thingsToNoteimg, message);
 
     await sleep(1500);
 
