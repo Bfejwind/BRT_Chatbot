@@ -2,6 +2,7 @@ require("dotenv").config();
 
 const express = require("express");
 const axios = require("axios");
+const { createDateFlowMessage, readDateFlowReply } = require("./bookingDateFlow");
 const BOOKING_CONFIG = require("./bookingSchedule");
 const { startBookingReminders } = require("./bookingReminders");
 const { readFile } = require("node:fs/promises");
@@ -609,6 +610,27 @@ function getBookingDates(now = new Date()) {
 }
 
 async function sendAvailableDates(to, page = 0) {
+    if (process.env.WHATSAPP_BOOKING_DATE_FLOW_ID) {
+        const draft = await getDraft(to);
+        if (!draft) {
+            await sendMessage(to, getLanguage(to) === "zh"
+                ? "预约已失效，请发送 Booking 重新开始。"
+                : "Your booking session expired. Send Booking to start again.");
+            return;
+        }
+        const payload = createDateFlowMessage({
+            to, draft, dates: getBookingDates(),
+            flowId: process.env.WHATSAPP_BOOKING_DATE_FLOW_ID,
+            isChinese: getLanguage(to) === "zh"
+        });
+        await axios.post(
+            `https://graph.facebook.com/v26.0/${process.env.PHONE_NUMBER_ID}/messages`,
+            payload,
+            { headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` } }
+        );
+        return;
+    }
+    // Keep booking available until the calendar Flow is published and configured.
     try {
         const isChinese = getLanguage(to) === "zh";
         const dates = getBookingDates();
@@ -1688,6 +1710,23 @@ async function handleTextMessage(from, message) {
 //Interactive response Handler
 
 async function handleInteractiveMessage(from, message) {
+    if (message?.interactive?.type === "nfm_reply") {
+        const draft = await getDraft(from);
+        const date = readDateFlowReply(
+            message.interactive.nfm_reply?.response_json, draft, getBookingDates()
+        );
+        if (!date) {
+            await sendMessage(from, getLanguage(from) === "zh"
+                ? "日期选择已失效，请重新选择。"
+                : "That date selection has expired. Please choose again.");
+            await sendAvailableDates(from);
+            return;
+        }
+        await handleBookingDate(from, `BOOK_DATE_${date}`);
+        delete draft.date_flow_token;
+        delete draft.date_flow_expires_at;
+        return;
+    }
     let selectionId;
 
     if (message?.interactive?.type === "button_reply") {

@@ -1,0 +1,47 @@
+{
+  "version": "7.0",
+  "screens": [
+    {
+      "id": "BOOKING_DATE",
+      "title": "Booking / 预约",
+      "terminal": true,
+      "success": true,
+      "data": {
+        "min_date": { "type": "string", "__example__": "2026-10-02" },
+        "max_date": { "type": "string", "__example__": "2026-11-01" },
+        "date_label": { "type": "string", "__example__": "Booking date" },
+        "helper_text": { "type": "string", "__example__": "Choose a date, then continue to see available sessions." },
+        "continue_label": { "type": "string", "__example__": "Continue" }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "Form",
+            "name": "date_form",
+            "children": [
+              {
+                "type": "CalendarPicker",
+                "name": "booking_date",
+                "label": "${data.date_label}",
+                "mode": "single",
+                "required": true,
+                "min-date": "${data.min_date}",
+                "max-date": "${data.max_date}",
+                "helper-text": "${data.helper_text}"
+              },
+              {
+                "type": "Footer",
+                "label": "${data.continue_label}",
+                "on-click-action": {
+                  "name": "complete",
+                  "payload": { "booking_date": "${form.booking_date}" }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
