@@ -2,6 +2,8 @@ require("dotenv").config();
 
 const express = require("express");
 const axios = require("axios");
+const BOOKING_CONFIG = require("./bookingSchedule");
+const { startBookingReminders } = require("./bookingReminders");
 const { readFile } = require("node:fs/promises");
 const path = require("node:path");
 const {
@@ -690,8 +692,7 @@ async function getBookableSlots(date, partySize = 1) {
 
     const slots = [];
 
-    for (let hour = 12; hour < 17; hour++) {
-        const time = `${String(hour).padStart(2, "0")}:00`;
+    for (const time of BOOKING_CONFIG.startTimes) {
 
         const session = sessions.find(
             item => item.booking_time.slice(0, 5) === time
@@ -720,7 +721,7 @@ async function getBookableSlots(date, partySize = 1) {
         );
 
         const end = new Date(
-            start.getTime() + 60 * 60 * 1000
+            start.getTime() + BOOKING_CONFIG.durationMinutes * 60_000
         );
 
         slots.push({
@@ -753,11 +754,11 @@ async function sendAvailableTimes(to, date) {
         }
 
         const rows = slots.map(slot => {
-            const startTime = slot.start.toLocaleTimeString(
-                isChinese ? "zh-CN" : "en-SG",
+            const formatTime = value => value.toLocaleTimeString(
+                isChinese ? "zh-CN" : "en-US",
                 {
                     timeZone: "Asia/Singapore",
-                    hour: "2-digit",
+                    hour: "numeric",
                     minute: "2-digit"
                 }
             );
@@ -775,7 +776,7 @@ async function sendAvailableTimes(to, date) {
 
             return {
                 id: `BOOK_TIME_${hour}`,
-                title: startTime,
+                title: `${formatTime(slot.start)} - ${formatTime(slot.end)}`,
                 description: isChinese
                     ? `剩余 ${slot.remainingPlaces} 个名额`
                     : `${slot.remainingPlaces} places remaining`
@@ -982,6 +983,14 @@ async function handleBookingConfirm(from) {
         const selectedTime = String(
             draft.booking_time
         ).slice(0, 5);
+
+        if (!BOOKING_CONFIG.startTimes.includes(selectedTime)) {
+            await sendMessage(from, isChinese
+                ? "该时段已不可预约，请重新选择时间。"
+                : "That session time is no longer offered. Please choose a new time.");
+            await sendAvailableTimes(from, draft.booking_date);
+            return;
+        }
 
         const existingSession = sessions.find(
             session =>
@@ -1859,4 +1868,5 @@ app.post(
 );
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+    startBookingReminders();
 });

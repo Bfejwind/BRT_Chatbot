@@ -1,0 +1,14 @@
+{
+  "name": "tea_session_reminder",
+  "language": "en_US",
+  "category": "UTILITY",
+  "components": [
+    {
+      "type": "BODY",
+      "text": "Dear Guest,\n\nAuthentic Tea Essence Museum•Guanyiyangxing Tea Space is truly looking forward to welcoming you to our tea space tomorrow!\n\n🕰️ To help you buffer your time tomorrow, here is a quick look at our timeline:\n\n{{1}} - {{2}}\nWelcome & Registration\n\n{{3}}\nIntro & Seating starts promptly\n\nGentle reminder:\nWear loose, comfortable clothing for sitting. Avoid onion, ginger, garlic, curry, and other spicy foods. Avoid heavy meals or an empty stomach 1 hour prior.\n\nSee you tomorrow afternoon! Have a lovely day ahead.\n\n您好！茶之相博物馆·观颐养性茶空间期待您明天的光临。附上简要流程，方便您提前规划行程：\n\n- {{4}} - {{5}}：欢迎与签到\n- {{6}}：准时开场与入席\n\n明天下午见，祝您今日愉快！",
+      "example": {
+        "body_text": [["4:00 PM", "4:15 PM", "4:15 PM", "4:00 PM", "4:15 PM", "4:15 PM"]]
+      }
+    }
+  ]
+}

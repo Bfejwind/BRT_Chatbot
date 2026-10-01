@@ -1,4 +1,5 @@
 const supabase = require("./supabaseClient");
+const BOOKING_CONFIG = require("./bookingSchedule");
 
 // Temporary development-only drafts.
 // These disappear when the server restarts.
@@ -36,6 +37,9 @@ async function saveBookingDate(customerPhone, date) {
 }
 
 async function saveBookingTime(customerPhone, time) {
+    if (!BOOKING_CONFIG.startTimes.includes(time)) {
+        throw new Error("Invalid booking session time");
+    }
     const draft = drafts.get(customerPhone);
 
     if (!draft || !draft.booking_date) {
@@ -74,6 +78,10 @@ async function submitBooking(customerPhone) {
         !draft.party_size
     ) {
         throw new Error("Booking details are incomplete");
+    }
+
+    if (!BOOKING_CONFIG.startTimes.includes(String(draft.booking_time).slice(0, 5))) {
+        throw new Error("That session time is no longer offered");
     }
 
     // Supabase performs the capacity check and reservation atomically.

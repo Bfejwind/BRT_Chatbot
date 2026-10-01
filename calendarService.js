@@ -1,10 +1,6 @@
 const { google } = require("googleapis");
 
-const BOOKING_CONFIG = {
-    openHour: 12,
-    closeHour: 17,
-    durationMinutes: 60
-};
+const BOOKING_CONFIG = require("./bookingSchedule");
 function getSessionStart(bookingDate, bookingTime) {
     const date = String(bookingDate).slice(0, 10);
     const time = String(bookingTime).slice(0, 5);
@@ -109,14 +105,10 @@ async function getAvailableSlots(dateString) {
 
     const availableSlots = [];
 
-    for (
-        let hour = BOOKING_CONFIG.openHour;
-        hour < BOOKING_CONFIG.closeHour;
-        hour++
-    ) {
+    for (const time of BOOKING_CONFIG.startTimes) {
 
         const slotStart = new Date(
-            `${dateString}T${String(hour).padStart(2, "0")}:00:00+08:00`
+            `${dateString}T${time}:00+08:00`
         );
 
         const slotEnd = new Date(
@@ -248,6 +240,15 @@ async function createSessionEvent({
             );
         }
 
+        if (BOOKING_CONFIG.startTimes.includes(String(bookingTime).slice(0, 5)) &&
+            new Date(existing.data.end?.dateTime).getTime() !== end.getTime()) {
+            const updated = await calendar.events.patch({
+                calendarId: process.env.GOOGLE_CALENDAR_ID,
+                eventId: event.id,
+                requestBody: { end: event.end }
+            });
+            return updated.data;
+        }
         return existing.data;
     }
 }
