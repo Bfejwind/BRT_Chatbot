@@ -2,11 +2,6 @@ require("dotenv").config();
 
 const express = require("express");
 const axios = require("axios");
-const { createDateFlowMessage, readDateFlowReply } = require("./bookingDateFlow");
-const BOOKING_CONFIG = require("./bookingSchedule");
-const { startBookingReminders } = require("./bookingReminders");
-const { readFile } = require("node:fs/promises");
-const path = require("node:path");
 const {
     claimMessage,
     completeMessage,
@@ -34,23 +29,23 @@ const interactionHandlers = {
     BOOK_CONFIRM: handleBookingConfirm,
     BOOK_CANCEL: handleBookingCancel,
 
-    // Support FAQ options in messages sent before the PDF replaced the menu.
-    FAQ_EXPECT: handleFAQ,
-    FAQ_DURATION: handleFAQ,
-    FAQ_BEGINNER: handleFAQ,
-    FAQ_BRING: handleFAQ,
-    FAQ_WEAR: handleFAQ,
-    FAQ_CHILDREN: handleFAQ,
-    FAQ_CAFFEINE: handleFAQ,
-    FAQ_CHANGE: handleFAQ,
-    FAQ_LATE: handleFAQ,
+    // FAQ
+    FAQ_EXPECT: handleFAQExpect,
+    FAQ_DURATION: handleFAQDuration,
+    FAQ_BEGINNER: handleFAQBeginner,
+    FAQ_BRING: handleFAQBring,
+    FAQ_WEAR: handleFAQWear,
+    FAQ_CHILDREN: handleFAQChildren,
+    FAQ_CAFFEINE: handleFAQCaffeine,
+    FAQ_CHANGE: handleFAQChange,
+    FAQ_LATE: handleFAQLate,
 
     // Navigation
-    BACK_FAQ: handleFAQ,
+    BACK_FAQ: handleBackFAQ,
     MAIN_MENU: handleMainMenu,
 
     // Question handling
-    QUESTION_FAQ: handleFAQ,
+    QUESTION_FAQ: handleQuestionFAQ,
     QUESTION_STAFF: handleQuestionStaff
 };
 const images = {
@@ -62,12 +57,7 @@ const images = {
 
     ceremonyPrices:
         "https://ixjmzksmazysazlyoxne.supabase.co/storage/v1/object/public/chatbot-images/CeremonyPrices.jpg",
-    thingsToNoteimg:
-        "https://ixjmzksmazysazlyoxne.supabase.co/storage/v1/object/public/chatbot-images/thingstonote.png",
-    bannerLight:
-        "https://ixjmzksmazysazlyoxne.supabase.co/storage/v1/object/public/chatbot-images/bannerLight.png",
-    bannerDark:
-        "https://ixjmzksmazysazlyoxne.supabase.co/storage/v1/object/public/chatbot-images/bannerDark.png"
+
 };
 const {
     getDraft,
@@ -102,9 +92,9 @@ const PORT = process.env.PORT || 3000;
 // Public landing page. Meta's app review asks for a website that shows
 // the service and the business providing it. EDIT the SITE constants below.
 const SITE = {
-    businessName: "[X Corp Edutech Pte.Ltd.]",
-    contactEmail: "[h3lldragon@hotmail.com]",
-    location: "[Singapore,Singapore]"
+    businessName: "[YOUR BUSINESS NAME]",
+    contactEmail: "[YOUR CONTACT EMAIL]",
+    location: "[YOUR CITY, COUNTRY]"
 };
 
 app.get("/", (req, res) => {
@@ -279,42 +269,29 @@ app.post("/whatsapp-signup/exchange", async (req, res) => {
     }
 });
 
-function verifyMetaWebhookSignature(req) {
-    const appSecret = process.env.META_APP_SECRET;
-    const signature = req.get("X-Hub-Signature-256");
+// NOTE: Webhooks now arrive from 360dialog, not directly from Meta.
+// The HMAC "Platform Secret" signing scheme is a Partner Hub-only
+// feature and isn't available on a single-channel Client Hub account.
+// Instead, this checks a custom header you configure yourself when
+// editing the Channel Webhook URL in the 360dialog Hub (e.g. name it
+// X-Webhook-Secret, value is a random string you invent) — a plain
+// shared-secret check rather than a cryptographic signature.
+function verify360DialogWebhookSecret(req) {
+    const expectedSecret = process.env.D360_WEBHOOK_SECRET;
+    const receivedSecret = req.get("X-Webhook-Secret");
 
     // Fail closed if the server is not configured correctly.
-    if (!appSecret) {
-        console.error("META_APP_SECRET is not configured");
+    if (!expectedSecret) {
+        console.error("D360_WEBHOOK_SECRET is not configured");
         return false;
     }
 
-    // A valid signature requires the original request body.
-    if (!Buffer.isBuffer(req.rawBody)) {
-        console.error("Webhook raw body is unavailable");
+    if (typeof receivedSecret !== "string") {
         return false;
     }
 
-    // Meta's signature must be sha256= followed by 64 hex characters.
-    if (
-        typeof signature !== "string" ||
-        !/^sha256=[a-fA-F0-9]{64}$/.test(signature)
-    ) {
-        return false;
-    }
-
-    const expectedSignature =
-        "sha256=" +
-        crypto
-            .createHmac("sha256", appSecret)
-            .update(req.rawBody)
-            .digest("hex");
-
-    const receivedBuffer = Buffer.from(signature, "utf8");
-    const expectedBuffer = Buffer.from(
-        expectedSignature,
-        "utf8"
-    );
+    const receivedBuffer = Buffer.from(receivedSecret, "utf8");
+    const expectedBuffer = Buffer.from(expectedSecret, "utf8");
 
     // timingSafeEqual requires equal-length buffers.
     if (receivedBuffer.length !== expectedBuffer.length) {
@@ -344,7 +321,7 @@ app.get("/webhook", (req, res) => {
 async function sendMessage(to, messageText) {
     try {
         const response = await axios.post(
-            `https://graph.facebook.com/v26.0/${process.env.PHONE_NUMBER_ID}/messages`,
+            "https://waba-v2.360dialog.io/messages",
             {
                 messaging_product: "whatsapp",
                 to: to,
@@ -355,7 +332,7 @@ async function sendMessage(to, messageText) {
             },
             {
                 headers: {
-                    Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
+                    "D360-API-KEY": process.env.WHATSAPP_API_KEY,
                     "Content-Type": "application/json"
                 }
             }
@@ -374,7 +351,7 @@ async function sendMessage(to, messageText) {
 async function sendImage(to, imageUrl, caption = "") {
     try {
         const response = await axios.post(
-            `https://graph.facebook.com/v26.0/${process.env.PHONE_NUMBER_ID}/messages`,
+            "https://waba-v2.360dialog.io/messages",
             {
                 messaging_product: "whatsapp",
                 to: to,
@@ -386,7 +363,7 @@ async function sendImage(to, imageUrl, caption = "") {
             },
             {
                 headers: {
-                    Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
+                    "D360-API-KEY": process.env.WHATSAPP_API_KEY,
                     "Content-Type": "application/json"
                 }
             }
@@ -405,7 +382,7 @@ async function sendImage(to, imageUrl, caption = "") {
 async function sendLanguageMenu(to) {
     try {
         await axios.post(
-            `https://graph.facebook.com/v26.0/${process.env.PHONE_NUMBER_ID}/messages`,
+            "https://waba-v2.360dialog.io/messages",
             {
                 messaging_product: "whatsapp",
                 to: to,
@@ -437,7 +414,7 @@ async function sendLanguageMenu(to) {
             },
             {
                 headers: {
-                    Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
+                    "D360-API-KEY": process.env.WHATSAPP_API_KEY,
                     "Content-Type": "application/json"
                 }
             }
@@ -480,7 +457,7 @@ async function sendMainMenu(to) {
 
         // 3. Send the main menu
         await axios.post(
-            `https://graph.facebook.com/v26.0/${process.env.PHONE_NUMBER_ID}/messages`,
+            "https://waba-v2.360dialog.io/messages",
             {
                 messaging_product: "whatsapp",
                 to: to,
@@ -491,8 +468,8 @@ async function sendMainMenu(to) {
 
                     body: {
                         text: isChinese
-                            ? "请选择一个选项：\n发送“hi”或“hello”可返回语言选择。发送问题会转给工作人员，发送“Booking”可进入预约菜单。"
-                            : "Please select an option:\nSend “hi” or “hello” to return to language selection. Send a question to reach a staff member, or send “Booking” to open the booking menu."
+                            ? "请选择一个选项："
+                            : "Please select an option:"
                     },
 
                     action: {
@@ -539,8 +516,7 @@ async function sendMainMenu(to) {
             },
             {
                 headers: {
-                    Authorization:
-                        `Bearer ${process.env.WHATSAPP_TOKEN}`,
+                    "D360-API-KEY": process.env.WHATSAPP_API_KEY,
                     "Content-Type": "application/json"
                 }
             }
@@ -556,34 +532,138 @@ async function sendMainMenu(to) {
     }
 }
 
-async function sendFAQDocument(to) {
-    const pdf = await readFile(path.join(__dirname, "FAQ", "FAQ.pdf"));
-    const form = new FormData();
-    form.append("messaging_product", "whatsapp");
-    form.append("type", "application/pdf");
-    form.append("file", new Blob([pdf], { type: "application/pdf" }), "FAQ.pdf");
+async function sendFAQMenu(to) {
+    try {
+        const isChinese = getLanguage(to) === "zh";
 
-    const baseUrl = `https://graph.facebook.com/v26.0/${process.env.PHONE_NUMBER_ID}`;
-    const headers = {
-        Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`
-    };
-    const upload = await axios.post(`${baseUrl}/media`, form, { headers });
-    const mediaId = upload.data?.id;
+        const faqs = [
+            {
+                id: "FAQ_EXPECT",
+                en: "What should I expect during a tea ceremony?",
+                zh: "茶道体验包括什么？"
+            },
+            {
+                id: "FAQ_DURATION",
+                en: "How long does the tea ceremony take?",
+                zh: "茶道体验需要多长时间？"
+            },
+            {
+                id: "FAQ_BEGINNER",
+                en: "Do I need to know anything about tea beforehand?",
+                zh: "需要事先了解茶知识吗？"
+            },
+            {
+                id: "FAQ_BRING",
+                en: "Do I need to bring anything?",
+                zh: "需要携带什么吗？"
+            },
+            {
+                id: "FAQ_WEAR",
+                en: "What should I wear?",
+                zh: "应该穿什么？"
+            },
+            {
+                id: "FAQ_CHILDREN",
+                en: "Can children attend?",
+                zh: "儿童可以参加吗？"
+            },
+            {
+                id: "FAQ_CAFFEINE",
+                en: "Does the tea contain caffeine?",
+                zh: "茶含有咖啡因吗？"
+            },
+            {
+                id: "FAQ_CHANGE",
+                en: "Can I cancel or change my booking?",
+                zh: "可以取消或更改预约吗？"
+            },
+            {
+                id: "FAQ_LATE",
+                en: "What if I am late to my booking?",
+                zh: "如果预约迟到了怎么办？"
+            }
+        ];
 
-    if (!mediaId) {
-        throw new Error("FAQ PDF upload did not return a media ID");
+        // WhatsApp list-row titles have a 24-character limit.
+        // Display shortened titles while retaining full questions below.
+        const shortTitles = {
+            FAQ_EXPECT: ["What to expect?", "体验内容"],
+            FAQ_DURATION: ["How long is it?", "体验时长"],
+            FAQ_BEGINNER: ["Tea knowledge needed?", "需要茶知识吗？"],
+            FAQ_BRING: ["What should I bring?", "需要携带什么？"],
+            FAQ_WEAR: ["What should I wear?", "应该穿什么？"],
+            FAQ_CHILDREN: ["Can children attend?", "儿童可以参加吗？"],
+            FAQ_CAFFEINE: ["Does tea have caffeine?", "茶含咖啡因吗？"],
+            FAQ_CHANGE: ["Change or cancel?", "更改或取消预约？"],
+            FAQ_LATE: ["What if I'm late?", "如果迟到了？"]
+        };
+
+        const rows = faqs.map(faq => {
+            const title = isChinese
+                ? shortTitles[faq.id][1]
+                : shortTitles[faq.id][0];
+
+            const fullQuestion = isChinese ? faq.zh : faq.en;
+
+            return {
+                id: faq.id,
+                title,
+                // Only show a description when it adds different text.
+                ...(title === fullQuestion
+                    ? {}
+                    : { description: fullQuestion })
+            };
+        });
+
+        await axios.post(
+            "https://waba-v2.360dialog.io/messages",
+            {
+                messaging_product: "whatsapp",
+                to,
+                type: "interactive",
+                interactive: {
+                    type: "list",
+                    header: {
+                        type: "text",
+                        text: isChinese
+                            ? "常见问题"
+                            : "Frequently Asked Questions"
+                    },
+                    body: {
+                        text: isChinese
+                            ? "请选择您想了解的问题："
+                            : "Please select a question:"
+                    },
+                    action: {
+                        button: isChinese
+                            ? "查看问题"
+                            : "View Questions",
+                        sections: [
+                            {
+                                title: isChinese
+                                    ? "常见问题"
+                                    : "FAQs",
+                                rows
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                headers: {
+                    "D360-API-KEY": process.env.WHATSAPP_API_KEY,
+                    "Content-Type": "application/json"
+                }
+            }
+        );
+
+        console.log("FAQ menu sent successfully");
+    } catch (error) {
+        console.error(
+            "Error sending FAQ menu:",
+            error.response?.data || error.message
+        );
     }
-
-    // Let failures reach the webhook so an unsuccessful delivery can be retried.
-    await axios.post(`${baseUrl}/messages`, {
-        messaging_product: "whatsapp",
-        to,
-        type: "document",
-        document: {
-            id: mediaId,
-            filename: "FAQ.pdf"
-        }
-    }, { headers });
 }
 
 async function handleBooking(from) {
@@ -591,78 +671,44 @@ async function handleBooking(from) {
 
     await sendAvailableDates(from);
 }
-function getBookingDates(now = new Date()) {
-    const today = now.toLocaleDateString("en-CA", { timeZone: "Asia/Singapore" });
-    const start = new Date(`${today}T00:00:00Z`);
-    const lastDayNextMonth = new Date(Date.UTC(
-        start.getUTCFullYear(), start.getUTCMonth() + 2, 0
-    )).getUTCDate();
-    const end = new Date(Date.UTC(
-        start.getUTCFullYear(), start.getUTCMonth() + 1,
-        Math.min(start.getUTCDate(), lastDayNextMonth)
-    ));
-    const dates = [];
-    for (const date = new Date(start); date < end;) {
-        date.setUTCDate(date.getUTCDate() + 1);
-        dates.push(date.toISOString().slice(0, 10));
-    }
-    return dates;
-}
-
-async function sendAvailableDates(to, page = 0) {
-    if (process.env.WHATSAPP_BOOKING_DATE_FLOW_ID) {
-        const draft = await getDraft(to);
-        if (!draft) {
-            await sendMessage(to, getLanguage(to) === "zh"
-                ? "预约已失效，请发送 Booking 重新开始。"
-                : "Your booking session expired. Send Booking to start again.");
-            return;
-        }
-        const payload = createDateFlowMessage({
-            to, draft, dates: getBookingDates(),
-            flowId: process.env.WHATSAPP_BOOKING_DATE_FLOW_ID,
-            isChinese: getLanguage(to) === "zh"
-        });
-        await axios.post(
-            `https://graph.facebook.com/v26.0/${process.env.PHONE_NUMBER_ID}/messages`,
-            payload,
-            { headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` } }
-        );
-        return;
-    }
-    // Keep booking available until the calendar Flow is published and configured.
+async function sendAvailableDates(to) {
     try {
         const isChinese = getLanguage(to) === "zh";
-        const dates = getBookingDates();
-        // Eight dates leave room for both navigation rows in a ten-row list.
-        const pageSize = 8;
-        const lastPage = Math.ceil(dates.length / pageSize) - 1;
-        if (!Number.isInteger(page) || page < 0 || page > lastPage) {
-            page = 0;
-        }
-        const rows = dates.slice(page * pageSize, (page + 1) * pageSize)
-            .map(date => ({
-                id: `BOOK_DATE_${date}`,
-                title: new Date(`${date}T00:00:00Z`).toLocaleDateString(
-                    isChinese ? "zh-CN" : "en-SG",
-                    { timeZone: "UTC", weekday: "short", day: "numeric", month: "short" }
-                )
-            }));
-        if (page > 0) {
+
+        const rows = [];
+
+        for (let i = 1; i <= 7; i++) {
+            const date = new Date();
+
+            date.setDate(date.getDate() + i);
+
+            // Keep this value in YYYY-MM-DD because your code uses it internally
+            const dateString = date.toLocaleDateString(
+                "en-CA",
+                {
+                    timeZone: "Asia/Singapore"
+                }
+            );
+
+            // Only change what the customer sees
+            const displayDate = date.toLocaleDateString(
+                isChinese ? "zh-CN" : "en-SG",
+                {
+                    timeZone: "Asia/Singapore",
+                    weekday: "short",
+                    day: "numeric",
+                    month: "short"
+                }
+            );
+
             rows.push({
-                id: `BOOK_DATES_PAGE_${page - 1}`,
-                title: isChinese ? "上一页" : "Previous dates"
-            });
-        }
-        if (page < lastPage) {
-            rows.push({
-                id: `BOOK_DATES_PAGE_${page + 1}`,
-                title: isChinese ? "下一页" : "Next dates"
+                id: `BOOK_DATE_${dateString}`,
+                title: displayDate
             });
         }
 
         await axios.post(
-            `https://graph.facebook.com/v26.0/${process.env.PHONE_NUMBER_ID}/messages`,
+            "https://waba-v2.360dialog.io/messages",
             {
                 messaging_product: "whatsapp",
                 to: to,
@@ -671,8 +717,8 @@ async function sendAvailableDates(to, page = 0) {
                     type: "list",
                     body: {
                         text: isChinese
-                            ? `请选择预约日期（可提前一个月预约）。第 ${page + 1}/${lastPage + 1} 页。`
-                            : `Choose a date up to one month ahead. Page ${page + 1}/${lastPage + 1}.`
+                            ? "请选择预约日期。"
+                            : "Please choose a booking date."
                     },
                     action: {
                         button: isChinese
@@ -693,7 +739,7 @@ async function sendAvailableDates(to, page = 0) {
             },
             {
                 headers: {
-                    Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
+                    "D360-API-KEY": process.env.WHATSAPP_API_KEY,
                     "Content-Type": "application/json"
                 }
             }
@@ -707,14 +753,12 @@ async function sendAvailableDates(to, page = 0) {
     }
 }
 async function getBookableSlots(date, partySize = 1) {
-    if (!getBookingDates().includes(date)) {
-        return [];
-    }
     const sessions = await getSessionAvailability(date);
 
     const slots = [];
 
-    for (const time of BOOKING_CONFIG.startTimes) {
+    for (let hour = 12; hour < 17; hour++) {
+        const time = `${String(hour).padStart(2, "0")}:00`;
 
         const session = sessions.find(
             item => item.booking_time.slice(0, 5) === time
@@ -743,7 +787,7 @@ async function getBookableSlots(date, partySize = 1) {
         );
 
         const end = new Date(
-            start.getTime() + BOOKING_CONFIG.durationMinutes * 60_000
+            start.getTime() + 60 * 60 * 1000
         );
 
         slots.push({
@@ -776,11 +820,11 @@ async function sendAvailableTimes(to, date) {
         }
 
         const rows = slots.map(slot => {
-            const formatTime = value => value.toLocaleTimeString(
-                isChinese ? "zh-CN" : "en-US",
+            const startTime = slot.start.toLocaleTimeString(
+                isChinese ? "zh-CN" : "en-SG",
                 {
                     timeZone: "Asia/Singapore",
-                    hour: "numeric",
+                    hour: "2-digit",
                     minute: "2-digit"
                 }
             );
@@ -798,7 +842,7 @@ async function sendAvailableTimes(to, date) {
 
             return {
                 id: `BOOK_TIME_${hour}`,
-                title: `${formatTime(slot.start)} - ${formatTime(slot.end)}`,
+                title: startTime,
                 description: isChinese
                     ? `剩余 ${slot.remainingPlaces} 个名额`
                     : `${slot.remainingPlaces} places remaining`
@@ -806,7 +850,7 @@ async function sendAvailableTimes(to, date) {
         });
 
         await axios.post(
-            `https://graph.facebook.com/v26.0/${process.env.PHONE_NUMBER_ID}/messages`,
+            "https://waba-v2.360dialog.io/messages",
             {
                 messaging_product: "whatsapp",
                 to: to,
@@ -837,7 +881,7 @@ async function sendAvailableTimes(to, date) {
             },
             {
                 headers: {
-                    Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
+                    "D360-API-KEY": process.env.WHATSAPP_API_KEY,
                     "Content-Type": "application/json"
                 }
             }
@@ -865,7 +909,7 @@ async function sendPartySizeMenu(to) {
     }
 
     await axios.post(
-        `https://graph.facebook.com/v26.0/${process.env.PHONE_NUMBER_ID}/messages`,
+        "https://waba-v2.360dialog.io/messages",
         {
             messaging_product: "whatsapp",
             to,
@@ -890,7 +934,7 @@ async function sendPartySizeMenu(to) {
         },
         {
             headers: {
-                Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
+                "D360-API-KEY": process.env.WHATSAPP_API_KEY,
                 "Content-Type": "application/json"
             }
         }
@@ -917,7 +961,7 @@ async function sendBookingConfirmation(to) {
     }
 
     await axios.post(
-        `https://graph.facebook.com/v26.0/${process.env.PHONE_NUMBER_ID}/messages`,
+        "https://waba-v2.360dialog.io/messages",
         {
             messaging_product: "whatsapp",
             to: to,
@@ -955,7 +999,7 @@ async function sendBookingConfirmation(to) {
         },
         {
             headers: {
-                Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
+                "D360-API-KEY": process.env.WHATSAPP_API_KEY,
                 "Content-Type": "application/json"
             }
         }
@@ -986,17 +1030,6 @@ async function handleBookingConfirm(from) {
             return;
         }
 
-        if (!getBookingDates().includes(draft.booking_date)) {
-            await sendMessage(
-                from,
-                isChinese
-                    ? "预约日期已失效，请重新选择日期。"
-                    : "That booking date is no longer available. Please choose a new date."
-            );
-            await sendAvailableDates(from);
-            return;
-        }
-
         // 2. Find the existing session, if there is one.
         const sessions = await getSessionAvailability(
             draft.booking_date
@@ -1005,14 +1038,6 @@ async function handleBookingConfirm(from) {
         const selectedTime = String(
             draft.booking_time
         ).slice(0, 5);
-
-        if (!BOOKING_CONFIG.startTimes.includes(selectedTime)) {
-            await sendMessage(from, isChinese
-                ? "该时段已不可预约，请重新选择时间。"
-                : "That session time is no longer offered. Please choose a new time.");
-            await sendAvailableTimes(from, draft.booking_date);
-            return;
-        }
 
         const existingSession = sessions.find(
             session =>
@@ -1148,7 +1173,7 @@ async function sendBookingRequestToStaff(customerPhone, booking) {
                 : "English";
 
         await axios.post(
-            `https://graph.facebook.com/v26.0/${process.env.PHONE_NUMBER_ID}/messages`,
+            "https://waba-v2.360dialog.io/messages",
             {
                 messaging_product: "whatsapp",
                 to: process.env.STAFF_PHONE_NUMBER,
@@ -1186,7 +1211,7 @@ async function sendBookingRequestToStaff(customerPhone, booking) {
             },
             {
                 headers: {
-                    Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
+                    "D360-API-KEY": process.env.WHATSAPP_API_KEY,
                     "Content-Type": "application/json"
                 }
             }
@@ -1199,12 +1224,72 @@ async function sendBookingRequestToStaff(customerPhone, booking) {
         );
     }
 }
+async function sendNavigationMenu(to) {
+    try {
+        const isChinese = getLanguage(to) === "zh";
+
+        const response = await axios.post(
+            "https://waba-v2.360dialog.io/messages",
+            {
+                messaging_product: "whatsapp",
+                to: to,
+                type: "interactive",
+                interactive: {
+                    type: "button",
+                    body: {
+                        text: isChinese
+                            ? "您还想了解其他内容吗？"
+                            : "Would you like to see anything else?"
+                    },
+                    action: {
+                        buttons: [
+                            {
+                                type: "reply",
+                                reply: {
+                                    id: "BACK_FAQ",
+                                    title: isChinese
+                                        ? "返回常见问题"
+                                        : "Back to FAQ"
+                                }
+                            },
+                            {
+                                type: "reply",
+                                reply: {
+                                    id: "MAIN_MENU",
+                                    title: isChinese
+                                        ? "主菜单"
+                                        : "Main Menu"
+                                }
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                headers: {
+                    "D360-API-KEY": process.env.WHATSAPP_API_KEY,
+                    "Content-Type": "application/json"
+                }
+            }
+        );
+
+        console.log("Navigation menu sent successfully");
+        console.log(response.data);
+
+    } catch (error) {
+        console.error(
+            "Error sending navigation menu:",
+            error.response?.data || error.message
+        );
+    }
+}
+
 async function sendContactNavigation(to) {
     try {
         const isChinese = getLanguage(to) === "zh";
 
         await axios.post(
-            `https://graph.facebook.com/v26.0/${process.env.PHONE_NUMBER_ID}/messages`,
+            "https://waba-v2.360dialog.io/messages",
             {
                 messaging_product: "whatsapp",
                 to: to,
@@ -1233,8 +1318,7 @@ async function sendContactNavigation(to) {
             },
             {
                 headers: {
-                    Authorization:
-                        `Bearer ${process.env.WHATSAPP_TOKEN}`,
+                    "D360-API-KEY": process.env.WHATSAPP_API_KEY,
                     "Content-Type": "application/json"
                 }
             }
@@ -1248,7 +1332,72 @@ async function sendContactNavigation(to) {
     }
 }
 
+async function sendQuestionOptions(to) {
+    try {
+        const isChinese = getLanguage(to) === "zh";
 
+        await axios.post(
+            "https://waba-v2.360dialog.io/messages",
+            {
+                messaging_product: "whatsapp",
+                to: to,
+                type: "interactive",
+                interactive: {
+                    type: "button",
+                    body: {
+                        text: isChinese
+                            ? "您的问题可能已经在常见问题中得到解答。您想先查看常见问题吗？"
+                            : "Your question may already be answered in our FAQ. " +
+                              "Would you like to check the FAQ first?"
+                    },
+                    action: {
+                        buttons: [
+                            {
+                                type: "reply",
+                                reply: {
+                                    id: "QUESTION_FAQ",
+                                    title: isChinese
+                                        ? "查看常见问题"
+                                        : "Check FAQ"
+                                }
+                            },
+                            {
+                                type: "reply",
+                                reply: {
+                                    id: "QUESTION_STAFF",
+                                    title: isChinese
+                                        ? "联系工作人员"
+                                        : "Contact Staff"
+                                }
+                            },
+                            {
+                                type: "reply",
+                                reply: {
+                                    id: "MAIN_MENU",
+                                    title: isChinese
+                                        ? "主菜单"
+                                        : "Main Menu"
+                                }
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                headers: {
+                    "D360-API-KEY": process.env.WHATSAPP_API_KEY,
+                    "Content-Type": "application/json"
+                }
+            }
+        );
+
+    } catch (error) {
+        console.error(
+            "Error sending question options:",
+            error.response?.data || error.message
+        );
+    }
+}
 async function notifyStaff(customerNumber, customerMessage) {
     try {
         const customerLanguage =
@@ -1282,7 +1431,7 @@ async function notifyStaff(customerNumber, customerMessage) {
 // =========================
 
 async function handleFAQ(from) {
-    await sendFAQDocument(from);
+    await sendFAQMenu(from);
 }
 
 
@@ -1301,7 +1450,7 @@ Arrive about 5-10 mins before the session to check in, use the restroom and sett
 
 No phones during the session, guests will be asked to place their phones in a basket before entering the tea area, this is to preserve the calm energy that the ceremony creates.`;
 
-    await sendImage(from, images.thingsToNoteimg, message);
+    await sendMessage(from, message);
 
     await sleep(1500);
 
@@ -1323,13 +1472,12 @@ async function handleBookingDate(from, selectionId) {
     const isChinese = getLanguage(from) === "zh";
     const date = selectionId.replace("BOOK_DATE_", "");
 
-    if (!getBookingDates().includes(date)) {
+    // Only accept the date format used by your menu.
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
         await sendMessage(
             from,
             isChinese ? "预约日期无效。" : "Invalid booking date."
         );
-        await sendAvailableDates(from);
-        return;
     }
 
     const draft = await getDraft(from);
@@ -1512,6 +1660,120 @@ async function handleBookingRejection(from, selectionId) {
 }
 
 
+// =========================
+// FAQ HANDLERS
+// =========================
+
+async function sendFAQAnswer(from, englishQuestion, englishAnswer,
+                             chineseQuestion, chineseAnswer) {
+    const isChinese = getLanguage(from) === "zh";
+
+    const message = isChinese
+        ? `${chineseQuestion}\n\n${chineseAnswer}`
+        : `${englishQuestion}\n\n${englishAnswer}`;
+
+    await sendMessage(from, message);
+    await sendNavigationMenu(from);
+}
+
+async function handleFAQExpect(from) {
+    await sendFAQAnswer(
+        from,
+        "What should I expect during a tea ceremony?",
+        "A tea ceremony is usually a calm, guided experience where the host prepares and serves tea while explaining the traditions, utensils, movements, and meaning behind the ceremony.",
+        "茶道体验包括什么？",
+        "茶道通常是一场宁静、由主持人引导的体验。主持人会准备并奉上茶，同时介绍茶道的传统、茶具、动作及其背后的意义。"
+    );
+}
+
+async function handleFAQDuration(from) {
+    await sendFAQAnswer(
+        from,
+        "How long does the tea ceremony take?",
+        "The experiences last around 30 minutes",
+        "茶道体验需要多长时间？",
+        "体验时间约为 30 分钟。"
+    );
+}
+
+async function handleFAQBeginner(from) {
+    await sendFAQAnswer(
+        from,
+        "Do I need to know anything about tea beforehand?",
+        "Not at all! Tea ceremonies are designed to be enjoyed by beginners. Your host will guide you through the experience and explain anything you need to know.",
+        "需要事先了解茶知识吗？",
+        "完全不需要！茶道体验也适合初学者。主持人会全程引导，并为您讲解所需了解的内容。"
+    );
+}
+
+async function handleFAQBring(from) {
+    await sendFAQAnswer(
+        from,
+        "Do I need to bring anything?",
+        "We only ask that you bring an open mind with the intent to disconnect from a hectic life.",
+        "需要携带什么吗？",
+        "您只需要带着开放的心态前来，暂时放下忙碌的生活，享受当下。"
+    );
+}
+
+async function handleFAQWear(from) {
+    await sendFAQAnswer(
+        from,
+        "What should I wear?",
+        "Loose or comfortable clothing will make the experience more enjoyable. Avoid anything that may make sitting or moving around uncomfortable.",
+        "应该穿什么？",
+        "宽松或舒适的衣物能让体验更加愉快。请避免穿着可能令您坐下或活动时感到不适的服装。"
+    );
+}
+
+async function handleFAQChildren(from) {
+    await sendFAQAnswer(
+        from,
+        "Can children attend?",
+        "Yes.",
+        "儿童可以参加吗？",
+        "可以。"
+    );
+}
+
+async function handleFAQCaffeine(from) {
+    await sendFAQAnswer(
+        from,
+        "Does the tea contain caffeine?",
+        "No.",
+        "茶含有咖啡因吗？",
+        "不含。"
+    );
+}
+
+async function handleFAQChange(from) {
+    await sendFAQAnswer(
+        from,
+        "Can I cancel or change my booking?",
+        "Yes, please contact staff by sending a message to this number with your request for change.",
+        "可以取消或更改预约吗？",
+        "可以。请发送消息至此号码，向工作人员提出您的更改或取消预约请求。"
+    );
+}
+
+async function handleFAQLate(from) {
+    await sendFAQAnswer(
+        from,
+        "What if I am late to my booking?",
+        "Please contact our staff for assistance. [REPLACE WITH YOUR ACTUAL LATENESS POLICY]",
+        "如果预约迟到了怎么办？",
+        "请联系工作人员寻求协助。[请替换为实际的迟到处理规定]"
+    );
+}
+
+// =========================
+// NAVIGATION HANDLERS
+// =========================
+
+async function handleBackFAQ(from) {
+    await sendFAQMenu(from);
+}
+
 async function handleMainMenu(from) {
     await sendMainMenu(from);
 }
@@ -1520,6 +1782,10 @@ async function handleMainMenu(from) {
 // =========================
 // QUESTION HANDLERS
 // =========================
+
+async function handleQuestionFAQ(from) {
+    await sendFAQMenu(from);
+}
 
 async function handleQuestionStaff(from) {
     const originalQuestion = pendingQuestions[from];
@@ -1546,11 +1812,6 @@ async function handleTextMessage(from, message) {
 
     const language = getLanguage(from);
     const isChinese = language === "zh";
-
-    if (!userLanguages[from]) {
-        await sendLanguageMenu(from);
-        return;
-    }
 
     // English greetings
     const englishGreetings = [
@@ -1579,11 +1840,6 @@ async function handleTextMessage(from, message) {
         .toLowerCase()
         .replace(/[.,!?:;'"()]/g, "")
         .trim();
-
-    if (normalizedText === "booking") {
-        await handleBooking(from);
-        return;
-    }
 
     // English closing messages
     const englishClosingMessages = [
@@ -1626,11 +1882,13 @@ async function handleTextMessage(from, message) {
         "拜拜"
     ];
 
+    // Check English greeting
     const containsEnglishGreeting = englishGreetings.some(greeting => {
         const regex = new RegExp(`\\b${greeting}\\b`, "i");
         return regex.test(text);
     });
 
+    // Check Chinese greeting
     const containsChineseGreeting = chineseGreetings.some(greeting => {
         return text.includes(greeting);
     });
@@ -1648,7 +1906,13 @@ async function handleTextMessage(from, message) {
     // 1. Greeting
     // -----------------------------
     if (containsGreeting) {
-        await sendLanguageMenu(from);
+        if (!userLanguages[from]) {
+            await sendLanguageMenu(from);
+        }
+        else {
+            await sendMainMenu(from);
+        }
+
         return;
     }
 
@@ -1679,16 +1943,9 @@ async function handleTextMessage(from, message) {
     // 3. Question
     // -----------------------------
     if (containsQuestion) {
-        await notifyStaff(from, text);
+        pendingQuestions[from] = text;
 
-        await sendMessage(
-            from,
-            isChinese
-                ? "感谢您的问题。工作人员已收到通知，并会尽快回复您。"
-                : "Thanks for your question. A staff member has been notified and will get back to you as soon as possible."
-        );
-
-        await sendContactNavigation(from);
+        await sendQuestionOptions(from);
 
         return;
     }
@@ -1710,23 +1967,6 @@ async function handleTextMessage(from, message) {
 //Interactive response Handler
 
 async function handleInteractiveMessage(from, message) {
-    if (message?.interactive?.type === "nfm_reply") {
-        const draft = await getDraft(from);
-        const date = readDateFlowReply(
-            message.interactive.nfm_reply?.response_json, draft, getBookingDates()
-        );
-        if (!date) {
-            await sendMessage(from, getLanguage(from) === "zh"
-                ? "日期选择已失效，请重新选择。"
-                : "That date selection has expired. Please choose again.");
-            await sendAvailableDates(from);
-            return;
-        }
-        await handleBookingDate(from, `BOOK_DATE_${date}`);
-        delete draft.date_flow_token;
-        delete draft.date_flow_expires_at;
-        return;
-    }
     let selectionId;
 
     if (message?.interactive?.type === "button_reply") {
@@ -1742,12 +1982,6 @@ async function handleInteractiveMessage(from, message) {
 
     if (selectionId.startsWith("BOOK_SIZE_")) {
         await handleBookingPartySize(from, selectionId);
-        return;
-    }
-
-    if (selectionId.startsWith("BOOK_DATES_PAGE_")) {
-        const page = selectionId.slice("BOOK_DATES_PAGE_".length);
-        await sendAvailableDates(from, /^\d+$/.test(page) ? Number(page) : 0);
         return;
     }
 
@@ -1770,10 +2004,10 @@ async function handleInteractiveMessage(from, message) {
     }
 }
 
-function requireValidMetaSignature(req, res, next) {
-    if (!verifyMetaWebhookSignature(req)) {
+function requireValid360DialogSecret(req, res, next) {
+    if (!verify360DialogWebhookSecret(req)) {
         console.warn(
-            "Rejected webhook: invalid or missing Meta signature"
+            "Rejected webhook: invalid or missing webhook secret"
         );
 
         return res.sendStatus(401);
@@ -1785,7 +2019,7 @@ function requireValidMetaSignature(req, res, next) {
 
 app.post(
     "/webhook",
-    requireValidMetaSignature,
+    requireValid360DialogSecret,
     async (req, res) => {
         try {
             const entries = req.body.entry || [];
@@ -1873,11 +2107,7 @@ app.post(
                             console.error(
                                 "Message processing failed:",
                                 messageId,
-                                JSON.stringify({
-                                    message: processingError.message,
-                                    httpStatus: processingError.response?.status,
-                                    metaError: processingError.response?.data?.error
-                                })
+                                processingError
                             );
 
                             try {
@@ -1903,11 +2133,7 @@ app.post(
             return res.sendStatus(200);
         }
         catch (error) {
-            console.error("Webhook error:", JSON.stringify({
-                message: error.message,
-                httpStatus: error.response?.status,
-                metaError: error.response?.data?.error
-            }));
+            console.error("Webhook error:", error);
 
             return res.sendStatus(500);
         }
@@ -1915,5 +2141,4 @@ app.post(
 );
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
-    startBookingReminders();
 });
