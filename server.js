@@ -2088,7 +2088,10 @@ app.post(
                             console.error(
                                 "Message processing failed:",
                                 messageId,
-                                processingError
+                                JSON.stringify({
+                                    status: processingError.response?.status,
+                                    error: processingError.response?.data?.error || processingError.message
+                                })
                             );
 
                             try {
