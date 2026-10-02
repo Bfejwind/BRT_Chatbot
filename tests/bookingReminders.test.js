@@ -114,3 +114,11 @@ test("database failure after acceptance never retries the send", async () => {
     assert.equal(f.sent.length, 1);
     assert.equal(f.errors.length, 1);
 });
+
+test("360dialog string rejections remain retryable and preserve the reason", async () => {
+    const f = fixture({ sendError: { response: { status: 429,
+        data: { error: "Too many requests for one number" } } } });
+    await f.run();
+    assert.equal(f.finished[0][1], "failed");
+    assert.equal(f.finished[0][3], "Too many requests for one number");
+});

@@ -2,6 +2,8 @@ require("dotenv").config();
 
 const express = require("express");
 const axios = require("axios");
+const { postWhatsApp } = require("./whatsappSender");
+const { startBookingReminders } = require("./bookingReminders");
 const {
     claimMessage,
     completeMessage,
@@ -320,7 +322,7 @@ app.get("/webhook", (req, res) => {
 });
 async function sendMessage(to, messageText) {
     try {
-        const response = await axios.post(
+        const response = await postWhatsApp(
             "https://waba-v2.360dialog.io/messages",
             {
                 messaging_product: "whatsapp",
@@ -346,11 +348,12 @@ async function sendMessage(to, messageText) {
             "Error sending message:",
             error.response?.data || error.message
         );
+        throw error;
     }
 }
 async function sendImage(to, imageUrl, caption = "") {
     try {
-        const response = await axios.post(
+        const response = await postWhatsApp(
             "https://waba-v2.360dialog.io/messages",
             {
                 messaging_product: "whatsapp",
@@ -377,11 +380,12 @@ async function sendImage(to, imageUrl, caption = "") {
             "Error sending image:",
             error.response?.data || error.message
         );
+        throw error;
     }
 }
 async function sendLanguageMenu(to) {
     try {
-        await axios.post(
+        await postWhatsApp(
             "https://waba-v2.360dialog.io/messages",
             {
                 messaging_product: "whatsapp",
@@ -425,6 +429,7 @@ async function sendLanguageMenu(to) {
             "Error sending language menu:",
             error.response?.data || error.message
         );
+        throw error;
     }
 }
 async function handleEnglishLanguage(from) {
@@ -452,11 +457,8 @@ async function sendMainMenu(to) {
                 : "Welcome! How can we help you today?"
         );
 
-        // 2. Wait 1.5 seconds
-        await sleep(1500);
-
-        // 3. Send the main menu
-        await axios.post(
+        // The shared sender paces the menu after the banner.
+        await postWhatsApp(
             "https://waba-v2.360dialog.io/messages",
             {
                 messaging_product: "whatsapp",
@@ -529,6 +531,7 @@ async function sendMainMenu(to) {
             "Error sending main menu:",
             error.response?.data || error.message
         );
+        throw error;
     }
 }
 
@@ -615,7 +618,7 @@ async function sendFAQMenu(to) {
             };
         });
 
-        await axios.post(
+        await postWhatsApp(
             "https://waba-v2.360dialog.io/messages",
             {
                 messaging_product: "whatsapp",
@@ -663,6 +666,7 @@ async function sendFAQMenu(to) {
             "Error sending FAQ menu:",
             error.response?.data || error.message
         );
+        throw error;
     }
 }
 
@@ -707,7 +711,7 @@ async function sendAvailableDates(to) {
             });
         }
 
-        await axios.post(
+        await postWhatsApp(
             "https://waba-v2.360dialog.io/messages",
             {
                 messaging_product: "whatsapp",
@@ -750,6 +754,7 @@ async function sendAvailableDates(to) {
             "Error sending available dates:",
             error.response?.data || error.message
         );
+        throw error;
     }
 }
 async function getBookableSlots(date, partySize = 1) {
@@ -849,7 +854,7 @@ async function sendAvailableTimes(to, date) {
             };
         });
 
-        await axios.post(
+        await postWhatsApp(
             "https://waba-v2.360dialog.io/messages",
             {
                 messaging_product: "whatsapp",
@@ -892,6 +897,7 @@ async function sendAvailableTimes(to, date) {
             "Error getting available times:",
             error.response?.data || error.message
         );
+        throw error;
     }
 }
 async function sendPartySizeMenu(to) {
@@ -908,7 +914,7 @@ async function sendPartySizeMenu(to) {
         });
     }
 
-    await axios.post(
+    await postWhatsApp(
         "https://waba-v2.360dialog.io/messages",
         {
             messaging_product: "whatsapp",
@@ -960,7 +966,7 @@ async function sendBookingConfirmation(to) {
         return;
     }
 
-    await axios.post(
+    await postWhatsApp(
         "https://waba-v2.360dialog.io/messages",
         {
             messaging_product: "whatsapp",
@@ -1112,6 +1118,7 @@ async function handleBookingConfirm(from) {
 
     } catch (error) {
         console.error("Booking confirmation error:", error);
+        if (error.isWhatsAppSendError) throw error;
 
         const errorText = error.message || "";
 
@@ -1172,7 +1179,7 @@ async function sendBookingRequestToStaff(customerPhone, booking) {
                 ? "Chinese"
                 : "English";
 
-        await axios.post(
+        await postWhatsApp(
             "https://waba-v2.360dialog.io/messages",
             {
                 messaging_product: "whatsapp",
@@ -1222,13 +1229,14 @@ async function sendBookingRequestToStaff(customerPhone, booking) {
             "Error sending booking to staff:",
             error.response?.data || error.message
         );
+        throw error;
     }
 }
 async function sendNavigationMenu(to) {
     try {
         const isChinese = getLanguage(to) === "zh";
 
-        const response = await axios.post(
+        const response = await postWhatsApp(
             "https://waba-v2.360dialog.io/messages",
             {
                 messaging_product: "whatsapp",
@@ -1281,6 +1289,7 @@ async function sendNavigationMenu(to) {
             "Error sending navigation menu:",
             error.response?.data || error.message
         );
+        throw error;
     }
 }
 
@@ -1288,7 +1297,7 @@ async function sendContactNavigation(to) {
     try {
         const isChinese = getLanguage(to) === "zh";
 
-        await axios.post(
+        await postWhatsApp(
             "https://waba-v2.360dialog.io/messages",
             {
                 messaging_product: "whatsapp",
@@ -1329,6 +1338,7 @@ async function sendContactNavigation(to) {
             "Error sending contact navigation:",
             error.response?.data || error.message
         );
+        throw error;
     }
 }
 
@@ -1336,7 +1346,7 @@ async function sendQuestionOptions(to) {
     try {
         const isChinese = getLanguage(to) === "zh";
 
-        await axios.post(
+        await postWhatsApp(
             "https://waba-v2.360dialog.io/messages",
             {
                 messaging_product: "whatsapp",
@@ -1396,6 +1406,7 @@ async function sendQuestionOptions(to) {
             "Error sending question options:",
             error.response?.data || error.message
         );
+        throw error;
     }
 }
 async function notifyStaff(customerNumber, customerMessage) {
@@ -1423,6 +1434,7 @@ async function notifyStaff(customerNumber, customerMessage) {
             "Error notifying staff:",
             error
         );
+        throw error;
     }
 }
 //Functions
@@ -1559,6 +1571,7 @@ async function handleBookingPartySize(from, selectionId) {
 
     } catch (error) {
         console.error("Party size error:", error);
+        if (error.isWhatsAppSendError) throw error;
 
         await sendMessage(
             from,
@@ -2141,4 +2154,5 @@ app.post(
 );
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+    startBookingReminders();
 });

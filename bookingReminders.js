@@ -69,8 +69,9 @@ function createReminderWorker({ store, send, config, now = () => new Date(), log
                     // connection loss may happen AFTER WhatsApp accepted the message.
                     const rejected = error.response?.status >= 400 &&
                         error.response?.status < 500 && error.response?.data?.error;
+                    const detail = error.response?.data?.error;
                     await store.finish(job, rejected ? "failed" : "unknown", null,
-                        rejected ? `WhatsApp error ${error.response.data.error.code}` :
+                        rejected ? (typeof detail === "string" ? detail : `WhatsApp error ${detail.code}`) :
                             "Delivery outcome unknown; review before retrying");
                     logger.error(`Booking reminder ${job.booking_id}: ${rejected ? "rejected" : "unknown outcome"}`);
                     continue;
@@ -96,11 +97,11 @@ function startBookingReminders() {
         template: process.env.WHATSAPP_REMINDER_TEMPLATE,
         language: process.env.WHATSAPP_REMINDER_LANGUAGE || "en_US"
     };
-    if (!config.template || !process.env.PHONE_NUMBER_ID || !process.env.WHATSAPP_TOKEN) {
-        throw new Error("Booking reminders require a template, PHONE_NUMBER_ID and WHATSAPP_TOKEN");
+    if (!config.template || !process.env.WHATSAPP_API_KEY) {
+        throw new Error("Booking reminders require a template and WHATSAPP_API_KEY");
     }
     const db = require("./supabaseClient");
-    const axios = require("axios");
+    const { postWhatsApp } = require("./whatsappSender");
     const { getBookingById } = require("./bookingDatabase");
     const store = {
         async claim() {
@@ -129,10 +130,11 @@ function startBookingReminders() {
         }
     };
     const run = createReminderWorker({ store, config, send: async payload => {
-        const response = await axios.post(
-            `https://graph.facebook.com/v26.0/${process.env.PHONE_NUMBER_ID}/messages`,
+        const response = await postWhatsApp(
+            "https://waba-v2.360dialog.io/messages",
             payload,
-            { headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` }, timeout: 30000 }
+            { headers: { "D360-API-KEY": process.env.WHATSAPP_API_KEY,
+                "Content-Type": "application/json" }, timeout: 30000 }
         );
         return response.data;
     } });

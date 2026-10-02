@@ -27,13 +27,16 @@ collect customer names, so the greeting is "Dear Guest" rather than "Dear Jannal
    WHATSAPP_REMINDER_LANGUAGE=en_US
    ```
 
-   Existing `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `PHONE_NUMBER_ID`, and
-   `WHATSAPP_TOKEN` are also required. The Supabase key must have service-role access.
+   Existing `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, and `WHATSAPP_API_KEY`
+   (the 360dialog channel key) are also required. The Supabase key must have service-role access.
 4. Restart/deploy the server on an always-on host. A sleeping or stopped server
    cannot run the scheduler. No customer messages are sent by the automated tests.
 
 The worker is disabled until explicitly enabled. Ordinary text messages are not
 used as a fallback: proactive reminders use an approved WhatsApp template.
+Reminders use the same 360dialog send queue as customer replies and staff notifications.
+Explicit rate-limit rejections receive up to three immediate retries with backoff;
+successful messages and uncertain network failures are not automatically resent by the queue.
 See [Meta's template sending reference](https://whatsapp.github.io/WhatsApp-Nodejs-SDK/api-reference/messages/template/).
 
 ## Timing and recovery
