@@ -66,7 +66,7 @@ function handlerFixture(f) {
     };
     vm.createContext(context);
     vm.runInContext(source.slice(source.indexOf("async function handleInteractiveMessage("),
-        source.indexOf("function requireValidMetaSignature(")), context);
+        source.indexOf("function requireValid360DialogSecret(")), context);
     return { context, selected, messages, reopened: () => reopened };
 }
 

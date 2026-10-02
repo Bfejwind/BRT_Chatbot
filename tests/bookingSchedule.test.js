@@ -64,7 +64,7 @@ test("customer menu uses the same schedule, full ranges, and valid row lengths",
     const context = { BOOKING_CONFIG: config, process: { env: {} }, console,
         getBookingDates: () => ["2026-10-02"], getSessionAvailability: async () => [],
         hasExternalCalendarConflict: async () => false, getLanguage: () => "en",
-        axios: { post: async (url, body) => payloads.push(body) } };
+        postWhatsApp: async (url, body) => payloads.push(body) };
     vm.createContext(context);
     const start = source.indexOf("async function getBookableSlots(");
     const end = source.indexOf("\nasync function ", source.indexOf("async function sendAvailableTimes(") + 1);

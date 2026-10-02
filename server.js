@@ -2,6 +2,10 @@ require("dotenv").config();
 
 const express = require("express");
 const axios = require("axios");
+const { createDateFlowMessage, readDateFlowReply } = require("./bookingDateFlow");
+const BOOKING_CONFIG = require("./bookingSchedule");
+const { readFile } = require("node:fs/promises");
+const path = require("node:path");
 const { postWhatsApp } = require("./whatsappSender");
 const { startBookingReminders } = require("./bookingReminders");
 const {
@@ -32,22 +36,22 @@ const interactionHandlers = {
     BOOK_CANCEL: handleBookingCancel,
 
     // FAQ
-    FAQ_EXPECT: handleFAQExpect,
-    FAQ_DURATION: handleFAQDuration,
-    FAQ_BEGINNER: handleFAQBeginner,
-    FAQ_BRING: handleFAQBring,
-    FAQ_WEAR: handleFAQWear,
-    FAQ_CHILDREN: handleFAQChildren,
-    FAQ_CAFFEINE: handleFAQCaffeine,
-    FAQ_CHANGE: handleFAQChange,
-    FAQ_LATE: handleFAQLate,
+    FAQ_EXPECT: handleFAQ,
+    FAQ_DURATION: handleFAQ,
+    FAQ_BEGINNER: handleFAQ,
+    FAQ_BRING: handleFAQ,
+    FAQ_WEAR: handleFAQ,
+    FAQ_CHILDREN: handleFAQ,
+    FAQ_CAFFEINE: handleFAQ,
+    FAQ_CHANGE: handleFAQ,
+    FAQ_LATE: handleFAQ,
 
     // Navigation
-    BACK_FAQ: handleBackFAQ,
+    BACK_FAQ: handleFAQ,
     MAIN_MENU: handleMainMenu,
 
     // Question handling
-    QUESTION_FAQ: handleQuestionFAQ,
+    QUESTION_FAQ: handleFAQ,
     QUESTION_STAFF: handleQuestionStaff
 };
 const images = {
@@ -470,8 +474,8 @@ async function sendMainMenu(to) {
 
                     body: {
                         text: isChinese
-                            ? "请选择一个选项："
-                            : "Please select an option:"
+                            ? "请选择一个选项：\n发送“hi”或“hello”可返回语言选择。发送问题会转给工作人员，发送“Booking”可进入预约菜单。"
+                            : "Please select an option:\nSend “hi” or “hello” to return to language selection. Send a question to reach a staff member, or send “Booking” to open the booking menu."
                     },
 
                     action: {
@@ -535,139 +539,34 @@ async function sendMainMenu(to) {
     }
 }
 
-async function sendFAQMenu(to) {
-    try {
-        const isChinese = getLanguage(to) === "zh";
+async function sendFAQDocument(to) {
+    const pdf = await readFile(path.join(__dirname, "FAQ", "FAQ.pdf"));
+    const form = new FormData();
+    form.append("messaging_product", "whatsapp");
+    form.append("type", "application/pdf");
+    form.append("file", new Blob([pdf], { type: "application/pdf" }), "FAQ.pdf");
 
-        const faqs = [
-            {
-                id: "FAQ_EXPECT",
-                en: "What should I expect during a tea ceremony?",
-                zh: "茶道体验包括什么？"
-            },
-            {
-                id: "FAQ_DURATION",
-                en: "How long does the tea ceremony take?",
-                zh: "茶道体验需要多长时间？"
-            },
-            {
-                id: "FAQ_BEGINNER",
-                en: "Do I need to know anything about tea beforehand?",
-                zh: "需要事先了解茶知识吗？"
-            },
-            {
-                id: "FAQ_BRING",
-                en: "Do I need to bring anything?",
-                zh: "需要携带什么吗？"
-            },
-            {
-                id: "FAQ_WEAR",
-                en: "What should I wear?",
-                zh: "应该穿什么？"
-            },
-            {
-                id: "FAQ_CHILDREN",
-                en: "Can children attend?",
-                zh: "儿童可以参加吗？"
-            },
-            {
-                id: "FAQ_CAFFEINE",
-                en: "Does the tea contain caffeine?",
-                zh: "茶含有咖啡因吗？"
-            },
-            {
-                id: "FAQ_CHANGE",
-                en: "Can I cancel or change my booking?",
-                zh: "可以取消或更改预约吗？"
-            },
-            {
-                id: "FAQ_LATE",
-                en: "What if I am late to my booking?",
-                zh: "如果预约迟到了怎么办？"
-            }
-        ];
+    const baseUrl = "https://waba-v2.360dialog.io";
+    const headers = {
+        "D360-API-KEY": process.env.WHATSAPP_API_KEY
+    };
+    const upload = await axios.post(`${baseUrl}/media`, form, { headers });
+    const mediaId = upload.data?.id;
 
-        // WhatsApp list-row titles have a 24-character limit.
-        // Display shortened titles while retaining full questions below.
-        const shortTitles = {
-            FAQ_EXPECT: ["What to expect?", "体验内容"],
-            FAQ_DURATION: ["How long is it?", "体验时长"],
-            FAQ_BEGINNER: ["Tea knowledge needed?", "需要茶知识吗？"],
-            FAQ_BRING: ["What should I bring?", "需要携带什么？"],
-            FAQ_WEAR: ["What should I wear?", "应该穿什么？"],
-            FAQ_CHILDREN: ["Can children attend?", "儿童可以参加吗？"],
-            FAQ_CAFFEINE: ["Does tea have caffeine?", "茶含咖啡因吗？"],
-            FAQ_CHANGE: ["Change or cancel?", "更改或取消预约？"],
-            FAQ_LATE: ["What if I'm late?", "如果迟到了？"]
-        };
-
-        const rows = faqs.map(faq => {
-            const title = isChinese
-                ? shortTitles[faq.id][1]
-                : shortTitles[faq.id][0];
-
-            const fullQuestion = isChinese ? faq.zh : faq.en;
-
-            return {
-                id: faq.id,
-                title,
-                // Only show a description when it adds different text.
-                ...(title === fullQuestion
-                    ? {}
-                    : { description: fullQuestion })
-            };
-        });
-
-        await postWhatsApp(
-            "https://waba-v2.360dialog.io/messages",
-            {
-                messaging_product: "whatsapp",
-                to,
-                type: "interactive",
-                interactive: {
-                    type: "list",
-                    header: {
-                        type: "text",
-                        text: isChinese
-                            ? "常见问题"
-                            : "Frequently Asked Questions"
-                    },
-                    body: {
-                        text: isChinese
-                            ? "请选择您想了解的问题："
-                            : "Please select a question:"
-                    },
-                    action: {
-                        button: isChinese
-                            ? "查看问题"
-                            : "View Questions",
-                        sections: [
-                            {
-                                title: isChinese
-                                    ? "常见问题"
-                                    : "FAQs",
-                                rows
-                            }
-                        ]
-                    }
-                }
-            },
-            {
-                headers: {
-                    "D360-API-KEY": process.env.WHATSAPP_API_KEY,
-                    "Content-Type": "application/json"
-                }
-            }
-        );
-
-        console.log("FAQ menu sent successfully");
-    } catch (error) {
-        console.error(
-            "Error sending FAQ menu:",
-            error.response?.data || error.message
-        );
-        throw error;
+    if (!mediaId) {
+        throw new Error("FAQ PDF upload did not return a media ID");
     }
+
+    // Let failures reach the webhook so an unsuccessful delivery can be retried.
+    await postWhatsApp("https://waba-v2.360dialog.io/messages", {
+        messaging_product: "whatsapp",
+        to,
+        type: "document",
+        document: {
+            id: mediaId,
+            filename: "FAQ.pdf"
+        }
+    }, { headers });
 }
 
 async function handleBooking(from) {
@@ -675,39 +574,73 @@ async function handleBooking(from) {
 
     await sendAvailableDates(from);
 }
-async function sendAvailableDates(to) {
+function getBookingDates(now = new Date()) {
+    const today = now.toLocaleDateString("en-CA", { timeZone: "Asia/Singapore" });
+    const start = new Date(`${today}T00:00:00Z`);
+    const lastDayNextMonth = new Date(Date.UTC(
+        start.getUTCFullYear(), start.getUTCMonth() + 2, 0
+    )).getUTCDate();
+    const end = new Date(Date.UTC(
+        start.getUTCFullYear(), start.getUTCMonth() + 1,
+        Math.min(start.getUTCDate(), lastDayNextMonth)
+    ));
+    const dates = [];
+    for (const date = new Date(start); date < end;) {
+        date.setUTCDate(date.getUTCDate() + 1);
+        dates.push(date.toISOString().slice(0, 10));
+    }
+    return dates;
+}
+
+async function sendAvailableDates(to, page = 0) {
+    if (process.env.WHATSAPP_BOOKING_DATE_FLOW_ID) {
+        const draft = await getDraft(to);
+        if (!draft) {
+            await sendMessage(to, getLanguage(to) === "zh"
+                ? "预约已失效，请发送 Booking 重新开始。"
+                : "Your booking session expired. Send Booking to start again.");
+            return;
+        }
+        const payload = createDateFlowMessage({
+            to, draft, dates: getBookingDates(),
+            flowId: process.env.WHATSAPP_BOOKING_DATE_FLOW_ID,
+            isChinese: getLanguage(to) === "zh"
+        });
+        await postWhatsApp(
+            "https://waba-v2.360dialog.io/messages",
+            payload,
+            { headers: { "D360-API-KEY": process.env.WHATSAPP_API_KEY } }
+        );
+        return;
+    }
+    // Keep booking available until the calendar Flow is published and configured.
     try {
         const isChinese = getLanguage(to) === "zh";
-
-        const rows = [];
-
-        for (let i = 1; i <= 7; i++) {
-            const date = new Date();
-
-            date.setDate(date.getDate() + i);
-
-            // Keep this value in YYYY-MM-DD because your code uses it internally
-            const dateString = date.toLocaleDateString(
-                "en-CA",
-                {
-                    timeZone: "Asia/Singapore"
-                }
-            );
-
-            // Only change what the customer sees
-            const displayDate = date.toLocaleDateString(
-                isChinese ? "zh-CN" : "en-SG",
-                {
-                    timeZone: "Asia/Singapore",
-                    weekday: "short",
-                    day: "numeric",
-                    month: "short"
-                }
-            );
-
+        const dates = getBookingDates();
+        // Eight dates leave room for both navigation rows in a ten-row list.
+        const pageSize = 8;
+        const lastPage = Math.ceil(dates.length / pageSize) - 1;
+        if (!Number.isInteger(page) || page < 0 || page > lastPage) {
+            page = 0;
+        }
+        const rows = dates.slice(page * pageSize, (page + 1) * pageSize)
+            .map(date => ({
+                id: `BOOK_DATE_${date}`,
+                title: new Date(`${date}T00:00:00Z`).toLocaleDateString(
+                    isChinese ? "zh-CN" : "en-SG",
+                    { timeZone: "UTC", weekday: "short", day: "numeric", month: "short" }
+                )
+            }));
+        if (page > 0) {
             rows.push({
-                id: `BOOK_DATE_${dateString}`,
-                title: displayDate
+                id: `BOOK_DATES_PAGE_${page - 1}`,
+                title: isChinese ? "上一页" : "Previous dates"
+            });
+        }
+        if (page < lastPage) {
+            rows.push({
+                id: `BOOK_DATES_PAGE_${page + 1}`,
+                title: isChinese ? "下一页" : "Next dates"
             });
         }
 
@@ -721,8 +654,8 @@ async function sendAvailableDates(to) {
                     type: "list",
                     body: {
                         text: isChinese
-                            ? "请选择预约日期。"
-                            : "Please choose a booking date."
+                            ? `请选择预约日期（可提前一个月预约）。第 ${page + 1}/${lastPage + 1} 页。`
+                            : `Choose a date up to one month ahead. Page ${page + 1}/${lastPage + 1}.`
                     },
                     action: {
                         button: isChinese
@@ -758,12 +691,14 @@ async function sendAvailableDates(to) {
     }
 }
 async function getBookableSlots(date, partySize = 1) {
+    if (!getBookingDates().includes(date)) {
+        return [];
+    }
     const sessions = await getSessionAvailability(date);
 
     const slots = [];
 
-    for (let hour = 12; hour < 17; hour++) {
-        const time = `${String(hour).padStart(2, "0")}:00`;
+    for (const time of BOOKING_CONFIG.startTimes) {
 
         const session = sessions.find(
             item => item.booking_time.slice(0, 5) === time
@@ -792,7 +727,7 @@ async function getBookableSlots(date, partySize = 1) {
         );
 
         const end = new Date(
-            start.getTime() + 60 * 60 * 1000
+            start.getTime() + BOOKING_CONFIG.durationMinutes * 60_000
         );
 
         slots.push({
@@ -825,11 +760,11 @@ async function sendAvailableTimes(to, date) {
         }
 
         const rows = slots.map(slot => {
-            const startTime = slot.start.toLocaleTimeString(
-                isChinese ? "zh-CN" : "en-SG",
+            const formatTime = value => value.toLocaleTimeString(
+                isChinese ? "zh-CN" : "en-US",
                 {
                     timeZone: "Asia/Singapore",
-                    hour: "2-digit",
+                    hour: "numeric",
                     minute: "2-digit"
                 }
             );
@@ -847,7 +782,7 @@ async function sendAvailableTimes(to, date) {
 
             return {
                 id: `BOOK_TIME_${hour}`,
-                title: startTime,
+                title: `${formatTime(slot.start)} - ${formatTime(slot.end)}`,
                 description: isChinese
                     ? `剩余 ${slot.remainingPlaces} 个名额`
                     : `${slot.remainingPlaces} places remaining`
@@ -1443,7 +1378,7 @@ async function notifyStaff(customerNumber, customerMessage) {
 // =========================
 
 async function handleFAQ(from) {
-    await sendFAQMenu(from);
+    await sendFAQDocument(from);
 }
 
 
@@ -1484,12 +1419,13 @@ async function handleBookingDate(from, selectionId) {
     const isChinese = getLanguage(from) === "zh";
     const date = selectionId.replace("BOOK_DATE_", "");
 
-    // Only accept the date format used by your menu.
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    if (!getBookingDates().includes(date)) {
         await sendMessage(
             from,
             isChinese ? "预约日期无效。" : "Invalid booking date."
         );
+        await sendAvailableDates(from);
+        return;
     }
 
     const draft = await getDraft(from);
@@ -1784,7 +1720,7 @@ async function handleFAQLate(from) {
 // =========================
 
 async function handleBackFAQ(from) {
-    await sendFAQMenu(from);
+    await sendFAQDocument(from);
 }
 
 async function handleMainMenu(from) {
@@ -1797,7 +1733,7 @@ async function handleMainMenu(from) {
 // =========================
 
 async function handleQuestionFAQ(from) {
-    await sendFAQMenu(from);
+    await sendFAQDocument(from);
 }
 
 async function handleQuestionStaff(from) {
@@ -1826,6 +1762,11 @@ async function handleTextMessage(from, message) {
     const language = getLanguage(from);
     const isChinese = language === "zh";
 
+    if (!userLanguages[from]) {
+        await sendLanguageMenu(from);
+        return;
+    }
+
     // English greetings
     const englishGreetings = [
         "hi",
@@ -1853,6 +1794,11 @@ async function handleTextMessage(from, message) {
         .toLowerCase()
         .replace(/[.,!?:;'"()]/g, "")
         .trim();
+
+    if (normalizedText === "booking") {
+        await handleBooking(from);
+        return;
+    }
 
     // English closing messages
     const englishClosingMessages = [
@@ -1895,13 +1841,11 @@ async function handleTextMessage(from, message) {
         "拜拜"
     ];
 
-    // Check English greeting
     const containsEnglishGreeting = englishGreetings.some(greeting => {
         const regex = new RegExp(`\\b${greeting}\\b`, "i");
         return regex.test(text);
     });
 
-    // Check Chinese greeting
     const containsChineseGreeting = chineseGreetings.some(greeting => {
         return text.includes(greeting);
     });
@@ -1919,13 +1863,7 @@ async function handleTextMessage(from, message) {
     // 1. Greeting
     // -----------------------------
     if (containsGreeting) {
-        if (!userLanguages[from]) {
-            await sendLanguageMenu(from);
-        }
-        else {
-            await sendMainMenu(from);
-        }
-
+        await sendLanguageMenu(from);
         return;
     }
 
@@ -1956,9 +1894,16 @@ async function handleTextMessage(from, message) {
     // 3. Question
     // -----------------------------
     if (containsQuestion) {
-        pendingQuestions[from] = text;
+        await notifyStaff(from, text);
 
-        await sendQuestionOptions(from);
+        await sendMessage(
+            from,
+            isChinese
+                ? "感谢您的问题。工作人员已收到通知，并会尽快回复您。"
+                : "Thanks for your question. A staff member has been notified and will get back to you as soon as possible."
+        );
+
+        await sendContactNavigation(from);
 
         return;
     }
@@ -1980,6 +1925,23 @@ async function handleTextMessage(from, message) {
 //Interactive response Handler
 
 async function handleInteractiveMessage(from, message) {
+    if (message?.interactive?.type === "nfm_reply") {
+        const draft = await getDraft(from);
+        const date = readDateFlowReply(
+            message.interactive.nfm_reply?.response_json, draft, getBookingDates()
+        );
+        if (!date) {
+            await sendMessage(from, getLanguage(from) === "zh"
+                ? "日期选择已失效，请重新选择。"
+                : "That date selection has expired. Please choose again.");
+            await sendAvailableDates(from);
+            return;
+        }
+        await handleBookingDate(from, `BOOK_DATE_${date}`);
+        delete draft.date_flow_token;
+        delete draft.date_flow_expires_at;
+        return;
+    }
     let selectionId;
 
     if (message?.interactive?.type === "button_reply") {
@@ -1995,6 +1957,12 @@ async function handleInteractiveMessage(from, message) {
 
     if (selectionId.startsWith("BOOK_SIZE_")) {
         await handleBookingPartySize(from, selectionId);
+        return;
+    }
+
+    if (selectionId.startsWith("BOOK_DATES_PAGE_")) {
+        const page = selectionId.slice("BOOK_DATES_PAGE_".length);
+        await sendAvailableDates(from, /^\d+$/.test(page) ? Number(page) : 0);
         return;
     }
 

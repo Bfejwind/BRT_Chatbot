@@ -35,7 +35,40 @@ test("booking handlers propagate delivery failures without sending a misleading 
 });
 
 test("every active server message request uses the shared sender", () => {
-    assert.equal((source.match(/https:\/\/waba-v2\.360dialog\.io\/messages/g) || []).length, 13);
-    assert.equal((source.match(/postWhatsApp\(\s*"https:\/\/waba-v2\.360dialog\.io\/messages"/g) || []).length, 13);
-    assert.ok(!source.includes("axios.post("));
+    assert.equal((source.match(/https:\/\/waba-v2\.360dialog\.io\/messages/g) || []).length, 14);
+    assert.equal((source.match(/postWhatsApp\(\s*"https:\/\/waba-v2\.360dialog\.io\/messages"/g) || []).length, 14);
+    assert.ok(!/axios\.post\([^\n]*messages/.test(source));
+});
+
+test("FAQ uploads the bundled PDF through 360dialog and sends its media ID", async () => {
+    const uploads = [], sends = [];
+    const run = handler("sendFAQDocument", {
+        __dirname: "project", path: require("node:path"), FormData, Blob,
+        process: { env: { WHATSAPP_API_KEY: "test-key" } },
+        readFile: async file => {
+            assert.equal(file, require("node:path").join("project", "FAQ", "FAQ.pdf"));
+            return Buffer.from("test PDF");
+        },
+        axios: { post: async (...args) => {
+            uploads.push(args);
+            return { data: { id: "pdf-media" } };
+        } },
+        postWhatsApp: async (...args) => sends.push(args)
+    });
+    await run("customer");
+    assert.equal(uploads[0][0], "https://waba-v2.360dialog.io/media");
+    assert.equal(uploads[0][2].headers["D360-API-KEY"], "test-key");
+    assert.equal(sends[0][1].document.id, "pdf-media");
+    assert.equal(sends[0][1].document.filename, "FAQ.pdf");
+    assert.equal(sends[0][1].to, "customer");
+});
+
+test("FAQ upload without a media ID fails before sending a document", async () => {
+    const run = handler("sendFAQDocument", {
+        __dirname: "project", path: require("node:path"), FormData, Blob,
+        process: { env: {} }, readFile: async () => Buffer.from("test PDF"),
+        axios: { post: async () => ({ data: {} }) },
+        postWhatsApp: async () => assert.fail("must not send without a media ID")
+    });
+    await assert.rejects(run("customer"), /did not return a media ID/);
 });
