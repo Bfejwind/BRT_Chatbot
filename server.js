@@ -1873,7 +1873,11 @@ app.post(
                             console.error(
                                 "Message processing failed:",
                                 messageId,
-                                processingError
+                                JSON.stringify({
+                                    message: processingError.message,
+                                    httpStatus: processingError.response?.status,
+                                    metaError: processingError.response?.data?.error
+                                })
                             );
 
                             try {
@@ -1899,7 +1903,11 @@ app.post(
             return res.sendStatus(200);
         }
         catch (error) {
-            console.error("Webhook error:", error);
+            console.error("Webhook error:", JSON.stringify({
+                message: error.message,
+                httpStatus: error.response?.status,
+                metaError: error.response?.data?.error
+            }));
 
             return res.sendStatus(500);
         }
