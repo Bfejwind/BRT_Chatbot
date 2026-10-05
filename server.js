@@ -7,7 +7,7 @@ const BOOKING_CONFIG = require("./bookingSchedule");
 const { readFile } = require("node:fs/promises");
 const path = require("node:path");
 const { postWhatsApp } = require("./whatsappSender");
-const { startBookingReminders } = require("./bookingReminders");
+const { startBookingReminders, reminderPayload } = require("./bookingReminders");
 const {
     claimMessage,
     completeMessage,
@@ -567,6 +567,13 @@ async function sendFAQDocument(to) {
             filename: "FAQ.pdf"
         }
     }, { headers });
+
+    await sendMessage(
+        to,
+        getLanguage(to) === "zh"
+            ? "常见问题已在上方文件中解答，请下载并查看。如有文件以外的其他问题，请直接提问，工作人员会尽快回复您。"
+            : "Frequently asked questions are answered in this file above, kindly download and view. For any questions outside of this document, please ask and a member of staff will reply as soon as possible"
+    );
 }
 
 async function handleBooking(from) {
@@ -578,21 +585,28 @@ function getBookingDates(now = new Date()) {
     const today = now.toLocaleDateString("en-CA", { timeZone: "Asia/Singapore" });
     const start = new Date(`${today}T00:00:00Z`);
     const lastDayNextMonth = new Date(Date.UTC(
-        start.getUTCFullYear(), start.getUTCMonth() + 2, 0
+        start.getUTCFullYear(), start.getUTCMonth() + 4, 0
     )).getUTCDate();
     const end = new Date(Date.UTC(
-        start.getUTCFullYear(), start.getUTCMonth() + 1,
+        start.getUTCFullYear(), start.getUTCMonth() + 3,
         Math.min(start.getUTCDate(), lastDayNextMonth)
     ));
     const dates = [];
     for (const date = new Date(start); date < end;) {
         date.setUTCDate(date.getUTCDate() + 1);
-        dates.push(date.toISOString().slice(0, 10));
+        const value = date.toISOString().slice(0, 10);
+        if (BOOKING_CONFIG.isBookableDate(value)) dates.push(value);
     }
     return dates;
 }
 
 async function sendAvailableDates(to, page = 0) {
+    if (!getBookingDates().length) {
+        await sendMessage(to, getLanguage(to) === "zh"
+            ? "目前没有可预约日期，请联系工作人员。"
+            : "There are currently no bookable dates. Please contact staff.");
+        return;
+    }
     if (process.env.WHATSAPP_BOOKING_DATE_FLOW_ID) {
         const draft = await getDraft(to);
         if (!draft) {
@@ -654,8 +668,8 @@ async function sendAvailableDates(to, page = 0) {
                     type: "list",
                     body: {
                         text: isChinese
-                            ? `请选择预约日期（可提前一个月预约）。第 ${page + 1}/${lastPage + 1} 页。`
-                            : `Choose a date up to one month ahead. Page ${page + 1}/${lastPage + 1}.`
+                            ? `请选择预约日期（可提前三个月预约）。第 ${page + 1}/${lastPage + 1} 页。`
+                            : `Choose a date up to three months ahead. Page ${page + 1}/${lastPage + 1}.`
                     },
                     action: {
                         button: isChinese
@@ -911,8 +925,8 @@ async function sendBookingConfirmation(to) {
                 type: "button",
                 body: {
                     text: isChinese
-                        ? `请确认您的预约申请。\n\n日期：${booking.booking_date}\n时间：${booking.booking_time}\n人数：${booking.party_size} 位`
-                        : `Please confirm your booking request.\n\nDate: ${booking.booking_date}\nTime: ${booking.booking_time}\nGroup size: ${booking.party_size}`
+                        ? `请确认您的预约申请。\n\n日期：${booking.booking_date}\n时间：${BOOKING_CONFIG.formatSessionHours(booking.booking_time, isChinese)}\n人数：${booking.party_size} 位`
+                        : `Please confirm your booking request.\n\nDate: ${booking.booking_date}\nTime: ${BOOKING_CONFIG.formatSessionHours(booking.booking_time, isChinese)}\nGroup size: ${booking.party_size}`
                 },
                 action: {
                     buttons: [
@@ -1047,10 +1061,11 @@ async function handleBookingConfirm(from) {
         await sendMessage(
             from,
             isChinese
-                ? `您的预约已确认！\n\n日期：${booking.booking_date}\n时间：${booking.booking_time}\n人数：${booking.party_size} 位`
-                : `Your booking is confirmed!\n\nDate: ${booking.booking_date}\nTime: ${booking.booking_time}\nGroup size: ${booking.party_size}`
+                ? `您的预约已确认！\n\n日期：${booking.booking_date}\n时间：${BOOKING_CONFIG.formatSessionHours(booking.booking_time, isChinese)}\n人数：${booking.party_size} 位`
+                : `Your booking is confirmed!\n\nDate: ${booking.booking_date}\nTime: ${BOOKING_CONFIG.formatSessionHours(booking.booking_time, isChinese)}\nGroup size: ${booking.party_size}`
         );
 
+        await sendReminderTestOption(from, booking.id);
     } catch (error) {
         console.error("Booking confirmation error:", error);
         if (error.isWhatsAppSendError) throw error;
@@ -1093,6 +1108,41 @@ async function handleBookingConfirm(from) {
     }
 }
 
+async function sendReminderTestOption(to, bookingId) {
+    const isChinese = getLanguage(to) === "zh";
+    await postWhatsApp("https://waba-v2.360dialog.io/messages", {
+        messaging_product: "whatsapp", to, type: "interactive",
+        interactive: {
+            type: "button",
+            body: { text: isChinese
+                ? "想测试预约提醒吗？点击下方按钮即可立即收到一条测试提醒。测试消息中的“明天”仅为模板示例，您的预约日期不变。正式提醒仍会在预约前24小时发送。"
+                : "Would you like to test your booking reminder? Tap below to receive a test reminder now. The test template says ‘tomorrow’ as a sample; your booked date stays the same. Your scheduled reminder will still be sent 24 hours before your booking." },
+            action: { buttons: [{ type: "reply", reply: {
+                id: `REMINDER_TEST_${bookingId}`,
+                title: isChinese ? "测试提醒" : "Test reminder"
+            } }] }
+        }
+    }, { headers: { "D360-API-KEY": process.env.WHATSAPP_API_KEY } });
+}
+
+async function handleReminderTest(from, bookingId) {
+    const booking = await getBookingById(bookingId);
+    const isChinese = getLanguage(from) === "zh";
+    if (!booking || booking.customer_phone !== from || booking.status !== "approved") {
+        await sendMessage(from, isChinese ? "找不到您的已确认预约。" : "No confirmed booking was found for you.");
+        return;
+    }
+    if (!process.env.WHATSAPP_REMINDER_TEMPLATE) {
+        await sendMessage(from, isChinese ? "预约提醒模板尚未配置，请联系工作人员。" : "The reminder template is not configured yet. Please contact staff.");
+        return;
+    }
+    // A customer-requested test does not claim or finish a scheduled reminder job.
+    await postWhatsApp("https://waba-v2.360dialog.io/messages", reminderPayload(booking, {
+        template: process.env.WHATSAPP_REMINDER_TEMPLATE,
+        language: process.env.WHATSAPP_REMINDER_LANGUAGE || "en_US"
+    }), { headers: { "D360-API-KEY": process.env.WHATSAPP_API_KEY }, timeout: 30000 });
+}
+
 async function handleBookingCancel(from) {
     const isChinese = getLanguage(from) === "zh";
 
@@ -1128,7 +1178,7 @@ async function sendBookingRequestToStaff(customerPhone, booking) {
                             `Customer: +${customerPhone}\n` +
                             `Language: ${customerLanguage}\n` +
                             `Date: ${booking.booking_date}\n` +
-                            `Time: ${booking.booking_time}\n` +
+                            `Time: ${BOOKING_CONFIG.formatSessionHours(booking.booking_time, false)}\n` +
                             `Group size: ${booking.party_size}`
                     },
                     action: {
@@ -1976,6 +2026,10 @@ async function handleInteractiveMessage(from, message) {
         return;
     }
 
+    if (selectionId.startsWith("REMINDER_TEST_")) {
+        await handleReminderTest(from, selectionId.slice("REMINDER_TEST_".length));
+        return;
+    }
     const handler = interactionHandlers[selectionId];
 
     if (handler) {

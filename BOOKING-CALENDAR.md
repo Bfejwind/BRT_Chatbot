@@ -1,5 +1,17 @@
 # Calendar date selection
 
+Singapore public holidays and substitute Mondays in MOM's 2026 and 2027 lists
+are closed to booking. Dates are checked again before saving and reserving.
+Maintain the lists in `bookingSchedule.js` when MOM announces later years or
+additional holidays; years without a verified list remain closed.
+Sources: [2026](https://www.mom.gov.sg/newsroom/press-releases/2025/0616-public-holidays-for-2026)
+and [2027](https://www.mom.gov.sg/newsroom/press-releases/2026/0618-public-holidays-for-2027).
+
+The updated Flow JSON includes `unavailable_dates` to disable holidays in the
+calendar. Publish a new Flow with `flows/booking-date.json`, then update
+`WHATSAPP_BOOKING_DATE_FLOW_ID` locally and on the host before deploying this
+version. An older published Flow does not have the new screen data field.
+
 Customers tap **Choose date**, browse the calendar inside WhatsApp, select a day,
 and tap **Continue** once. Calendar navigation does not send chat messages.
 The final submission returns to the chat and shows the three available session
@@ -24,7 +36,7 @@ times. Selecting a date does not itself reserve any places.
    experience on your phone. Menu names may vary across Meta accounts.
 
 The JSON example dates are only for the editor preview. The server passes fresh
-limits for tomorrow through one calendar month ahead in Singapore time, along
+limits for tomorrow through three calendar months ahead in Singapore time, along
 with English or Chinese labels. Availability is checked after date submission.
 
 Until a published Flow ID is configured, the existing paginated list remains

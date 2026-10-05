@@ -35,8 +35,8 @@ test("booking handlers propagate delivery failures without sending a misleading 
 });
 
 test("every active server message request uses the shared sender", () => {
-    assert.equal((source.match(/https:\/\/waba-v2\.360dialog\.io\/messages/g) || []).length, 14);
-    assert.equal((source.match(/postWhatsApp\(\s*"https:\/\/waba-v2\.360dialog\.io\/messages"/g) || []).length, 14);
+    assert.equal((source.match(/https:\/\/waba-v2\.360dialog\.io\/messages/g) || []).length, 16);
+    assert.equal((source.match(/postWhatsApp\(\s*"https:\/\/waba-v2\.360dialog\.io\/messages"/g) || []).length, 16);
     assert.ok(!/axios\.post\([^\n]*messages/.test(source));
 });
 
@@ -53,7 +53,13 @@ test("FAQ uploads the bundled PDF through 360dialog and sends its media ID", asy
             uploads.push(args);
             return { data: { id: "pdf-media" } };
         } },
-        postWhatsApp: async (...args) => sends.push(args)
+        postWhatsApp: async (...args) => sends.push(args),
+        getLanguage: () => "en",
+        sendMessage: async (to, text) => {
+            assert.equal(sends.length, 1);
+            assert.equal(to, "customer");
+            assert.ok(text.startsWith("Frequently asked questions are answered in this file above"));
+        }
     });
     await run("customer");
     assert.equal(uploads[0][0], "https://waba-v2.360dialog.io/media");
@@ -71,4 +77,42 @@ test("FAQ upload without a media ID fails before sending a document", async () =
         postWhatsApp: async () => assert.fail("must not send without a media ID")
     });
     await assert.rejects(run("customer"), /did not return a media ID/);
+});
+
+test("reminder tests use the approved customer's booking and template", async () => {
+    const booking = { customer_phone: "customer", status: "approved" };
+    const sends = [];
+    const run = handler("handleReminderTest", {
+        getBookingById: async () => booking, getLanguage: () => "en",
+        process: { env: { WHATSAPP_REMINDER_TEMPLATE: "tea_session_reminder" } },
+        reminderPayload: (value, config) => {
+            assert.equal(value, booking);
+            assert.equal(config.template, "tea_session_reminder");
+            return { to: value.customer_phone, type: "template" };
+        },
+        postWhatsApp: async (...args) => sends.push(args),
+        sendMessage: async () => assert.fail("valid test should send the template")
+    });
+    await run("customer", "booking-id");
+    assert.equal(sends.length, 1);
+    assert.equal(sends[0][1].to, "customer");
+});
+
+test("another customer cannot trigger a reminder test for someone else's booking", async () => {
+    let replies = 0;
+    const run = handler("handleReminderTest", {
+        getBookingById: async () => ({ customer_phone: "owner", status: "approved" }),
+        getLanguage: () => "en", sendMessage: async () => replies++,
+        postWhatsApp: async () => assert.fail("must not send another customer's reminder")
+    });
+    await run("other", "booking-id");
+    assert.equal(replies, 1);
+});
+
+test("booking window spans three calendar months and clamps month ends", () => {
+    const context = vm.createContext({ BOOKING_CONFIG: require("../bookingSchedule") });
+    vm.runInContext(source.slice(source.indexOf("function getBookingDates("),
+        source.indexOf("async function sendAvailableDates(")), context);
+    assert.equal(context.getBookingDates(new Date("2026-10-05T00:00:00+08:00")).at(-1), "2027-01-05");
+    assert.equal(context.getBookingDates(new Date("2026-11-30T00:00:00+08:00")).at(-1), "2027-02-28");
 });

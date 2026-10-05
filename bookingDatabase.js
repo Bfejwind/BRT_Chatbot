@@ -23,6 +23,9 @@ async function startBooking(customerPhone) {
 }
 
 async function saveBookingDate(customerPhone, date) {
+    if (!BOOKING_CONFIG.isBookableDate(date)) {
+        throw new Error("Booking is closed on Singapore public holidays or unverified years");
+    }
     const draft = drafts.get(customerPhone);
 
     if (!draft) {
@@ -84,6 +87,9 @@ async function submitBooking(customerPhone) {
         throw new Error("That session time is no longer offered");
     }
 
+    if (!BOOKING_CONFIG.isBookableDate(draft.booking_date)) {
+        throw new Error("Booking is closed on Singapore public holidays or unverified years");
+    }
     // Supabase performs the capacity check and reservation atomically.
     const { data: bookingId, error } = await supabase.rpc(
         "reserve_booking",

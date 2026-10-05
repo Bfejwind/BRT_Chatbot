@@ -5,6 +5,19 @@ const path = require("node:path");
 const vm = require("node:vm");
 const config = require("../bookingSchedule");
 
+test("blocks gazetted holidays and substitute Mondays, and closes unverified years", () => {
+    for (const date of ["2026-11-08", "2026-11-09", "2026-12-25", "2027-02-06", "2027-02-07", "2027-02-08", "2028-01-02"]) {
+        assert.equal(config.isBookableDate(date), false, date);
+    }
+    assert.equal(config.isBookableDate("2026-11-10"), true);
+    assert.equal(config.isBookableDate("2027-02-09"), true);
+});
+
+test("confirmation hours include the entire 90-minute Singapore session", () => {
+    assert.equal(config.formatSessionHours("14:00:00"), "2:00 PM - 3:30 PM (Singapore time)");
+    assert.equal(config.formatSessionHours("16:00", true), "16:00 - 17:30 (新加坡时间)");
+});
+
 function calendarFixture(events = [], insertError) {
     const writes = [];
     const api = {

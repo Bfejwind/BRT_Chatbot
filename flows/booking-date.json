@@ -7,6 +7,7 @@
       "terminal": true,
       "success": true,
       "data": {
+        "unavailable_dates": { "type": "array", "items": { "type": "string" }, "__example__": ["2026-11-08", "2026-11-09"] },
         "min_date": { "type": "string", "__example__": "2026-10-02" },
         "max_date": { "type": "string", "__example__": "2026-11-01" },
         "date_label": { "type": "string", "__example__": "Booking date" },
@@ -28,6 +29,7 @@
                 "required": true,
                 "min-date": "${data.min_date}",
                 "max-date": "${data.max_date}",
+                "unavailable-dates": "${data.unavailable_dates}",
                 "helper-text": "${data.helper_text}"
               },
               {

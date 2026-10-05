@@ -10,8 +10,8 @@ function createDateFlowMessage({ to, draft, dates, flowId, isChinese, now = Date
         interactive: {
             type: "flow",
             body: { text: isChinese
-                ? "打开日历选择预约日期，可提前一个月预约。"
-                : "Open the calendar to choose a date up to one month ahead." },
+                ? "打开日历选择预约日期，可提前三个月预约。"
+                : "Open the calendar to choose a date up to three months ahead." },
             action: {
                 name: "flow",
                 parameters: {
@@ -23,6 +23,17 @@ function createDateFlowMessage({ to, draft, dates, flowId, isChinese, now = Date
                         screen: "BOOKING_DATE",
                         data: {
                             min_date: dates[0], max_date: dates.at(-1),
+                            unavailable_dates: (() => {
+                                const allowed = new Set(dates);
+                                const excluded = [];
+                                for (const day = new Date(`${dates[0]}T00:00:00Z`);
+                                    day.toISOString().slice(0, 10) <= dates.at(-1);
+                                    day.setUTCDate(day.getUTCDate() + 1)) {
+                                    const date = day.toISOString().slice(0, 10);
+                                    if (!allowed.has(date)) excluded.push(date);
+                                }
+                                return excluded;
+                            })(),
                             date_label: isChinese ? "预约日期" : "Booking date",
                             helper_text: isChinese ? "选择日期后，点击继续查看可预约时段。"
                                 : "Choose a date, then continue to see available sessions.",

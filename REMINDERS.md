@@ -1,5 +1,12 @@
 # Booking reminders
 
+After confirmation, customers can tap **Test reminder** to receive the same
+approved reminder template immediately for their own approved booking. This
+does not change the booking or consume the scheduled reminder. The button's
+message explains that the template's "tomorrow" wording is only a test sample.
+The test requires a valid 360dialog key and an approved configured template,
+even when the automated scheduler is disabled.
+
 The server checks once per minute and on startup for approved bookings with a
 synchronized calendar session. Reminders go to `booking_requests.customer_phone`
 24 hours before the session, using Singapore time. For example, an October 2,
