@@ -69,10 +69,34 @@ test("FAQ uploads the bundled PDF through 360dialog and sends its media ID", asy
     assert.equal(sends[0][1].to, "customer");
 });
 
+test("Chinese FAQ reads, uploads and sends FAQchi.pdf with Chinese instructions", async () => {
+    const run = handler("sendFAQDocument", {
+        __dirname: "project", path: require("node:path"), FormData, Blob,
+        process: { env: {} }, getLanguage: () => "zh",
+        readFile: async file => {
+            assert.equal(file, require("node:path").join("project", "FAQ", "FAQchi.pdf"));
+            return Buffer.from("Chinese PDF");
+        },
+        axios: { post: async (url, form) => {
+            assert.equal(form.get("file").name, "FAQchi.pdf");
+            return { data: { id: "chinese-pdf" } };
+        } },
+        postWhatsApp: async (url, payload) => {
+            assert.equal(payload.document.filename, "FAQchi.pdf");
+            assert.equal(payload.document.id, "chinese-pdf");
+        },
+        sendMessage: async (to, text) => {
+            assert.equal(to, "customer");
+            assert.ok(text.startsWith("常见问题"));
+        }
+    });
+    await run("customer");
+});
+
 test("FAQ upload without a media ID fails before sending a document", async () => {
     const run = handler("sendFAQDocument", {
         __dirname: "project", path: require("node:path"), FormData, Blob,
-        process: { env: {} }, readFile: async () => Buffer.from("test PDF"),
+        process: { env: {} }, getLanguage: () => "en", readFile: async () => Buffer.from("test PDF"),
         axios: { post: async () => ({ data: {} }) },
         postWhatsApp: async () => assert.fail("must not send without a media ID")
     });

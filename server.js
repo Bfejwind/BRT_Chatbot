@@ -542,11 +542,13 @@ async function sendMainMenu(to) {
 }
 
 async function sendFAQDocument(to) {
-    const pdf = await readFile(path.join(__dirname, "FAQ", "FAQ.pdf"));
+    const isChinese = getLanguage(to) === "zh";
+    const filename = isChinese ? "FAQchi.pdf" : "FAQ.pdf";
+    const pdf = await readFile(path.join(__dirname, "FAQ", filename));
     const form = new FormData();
     form.append("messaging_product", "whatsapp");
     form.append("type", "application/pdf");
-    form.append("file", new Blob([pdf], { type: "application/pdf" }), "FAQ.pdf");
+    form.append("file", new Blob([pdf], { type: "application/pdf" }), filename);
 
     const baseUrl = "https://waba-v2.360dialog.io";
     const headers = {
@@ -566,13 +568,13 @@ async function sendFAQDocument(to) {
         type: "document",
         document: {
             id: mediaId,
-            filename: "FAQ.pdf"
+            filename
         }
     }, { headers });
 
     await sendMessage(
         to,
-        getLanguage(to) === "zh"
+        isChinese
             ? "常见问题已在上方文件中解答，请下载并查看。如有文件以外的其他问题，请直接提问，工作人员会尽快回复您。"
             : "Frequently asked questions are answered in this file above, kindly download and view. For any questions outside of this document, please ask and a member of staff will reply as soon as possible"
     );
