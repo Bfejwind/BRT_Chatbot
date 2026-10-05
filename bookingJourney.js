@@ -7,8 +7,15 @@ function createBookingJourney({ getDraft, startBooking, checkPackage, sendButton
         })));
     }
     async function bookingType(from) {
-        await ask(from, "Would you prefer a public or private session?",
-            "您希望参加公众场次还是私人场次？", [
+        const draft = await getDraft(from);
+        const privateEn = draft.first_visit
+            ? "If you prefer a private session, please note that the first-session promotional price does not apply. Private sessions are priced differently, and our staff will be happy to help arrange your visit and share the pricing with you."
+            : "If you prefer a private session, please note that membership packages do not apply. Private sessions are priced differently, and our staff will be happy to help arrange your visit and share the pricing with you.";
+        const privateZh = draft.first_visit
+            ? "若您希望预约私人场次，温馨提醒您：首次体验优惠价不适用于私人预约。私人场次收费有所不同，需要由工作人员协助安排。我们很乐意为您介绍价格并安排到访。"
+            : "若您希望预约私人场次，温馨提醒您：会员配套不适用于私人预约。私人场次收费有所不同，需要由工作人员协助安排。我们很乐意为您介绍价格并安排到访。";
+        await ask(from, "Would you prefer a public or private session?\n\n" + privateEn,
+            "您希望参加公众场次还是私人场次？\n\n" + privateZh, [
                 ["PUBLIC", "Public session", "公众场次"], ["PRIVATE", "Private session", "私人场次"]
             ]);
     }
@@ -43,6 +50,11 @@ function createBookingJourney({ getDraft, startBooking, checkPackage, sendButton
                     draft.journey_step = "type";
                     return bookingType(from);
                 }
+                draft.package_verified = false;
+                draft.package_routes = [];
+                await sendMessage(from, isChinese(from)
+                    ? "暂时未找到可使用的配套，您的配套可能已到期或次数已用完。如需协助，我们的工作人员很乐意为您核实。您也可以购买新的配套。"
+                    : "We couldn't find a package available to use at the moment. It may have expired or have no visits left. Our staff will be happy to help check this for you, or you can purchase a new package.");
             }
             draft.journey_step = "purchase";
             return purchase(from);
@@ -63,11 +75,12 @@ function createBookingJourney({ getDraft, startBooking, checkPackage, sendButton
                     "请选择公众场次类别。所有场次均为16:00–17:30。", [
                         ["WEEKDAY", "Weekday (Mon–Thu)", "平日（周一至周四）"],
                         ["WEEKEND", "Weekend (Fri–Sun)", "周末（周五至周日）"],
-                        ["PREMIUM", "Exclusive / Premium", "专享 / 高级"]
+                        ["EXCLUSIVE", "Exclusive", "专享"],
+                        ["PREMIUM", "Premium", "高级"]
                     ].filter(([id]) => draft.package_routes.includes(id.toLowerCase())));
             }
         }
-        if (["WEEKDAY", "WEEKEND", "PREMIUM"].includes(choice) &&
+        if (["WEEKDAY", "WEEKEND", "EXCLUSIVE", "PREMIUM"].includes(choice) &&
             draft.journey_step === "category" && draft.package_verified &&
             draft.package_routes.includes(choice.toLowerCase())) {
             draft.booking_route = choice.toLowerCase(); draft.journey_step = "dates";

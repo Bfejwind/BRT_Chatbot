@@ -2,18 +2,42 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createBookingJourney } = require("../bookingJourney");
 const schedule = require("../bookingSchedule");
-function fixture(membership = null) {
+function fixture(membership = null, chinese = false) {
     let draft;
-    const menus = [], staff = [], dates = [];
+    const menus = [], staff = [], dates = [], texts = [], messages = [], checks = [];
     const journey = createBookingJourney({
         startBooking: async () => (draft = {}), getDraft: async () => draft,
-        checkPackage: async () => membership, isChinese: () => false,
-        sendButtons: async (from, text, options) => menus.push(options),
-        sendMessage: async () => {}, notifyStaff: async (...args) => staff.push(args),
+        checkPackage: async from => { checks.push(from); return membership; }, isChinese: () => chinese,
+        sendButtons: async (from, text, options) => { menus.push(options); texts.push(text); },
+        sendMessage: async (from, text) => messages.push(text), notifyStaff: async (...args) => staff.push(args),
         showDates: async () => dates.push(draft.booking_route), showMainMenu: async () => {}
     });
-    return { journey, menus, staff, dates, draft: () => draft };
+    return { journey, menus, staff, dates, texts, messages, checks, draft: () => draft };
 }
+
+test("private pricing explanation accompanies the button in both languages", async () => {
+    for (const chinese of [false, true]) {
+        const f = fixture({ allowed_routes: ["premium"] }, chinese);
+        await f.journey.begin("customer"); await f.journey.select("customer", "FIRST");
+        assert.ok(f.menus.at(-1).some(row => row.id === "JOURNEY_PRIVATE"));
+        assert.match(f.texts.at(-1), chinese ? /首次体验优惠价不适用/ : /first-session promotional price does not apply/);
+        assert.match(f.texts.at(-1), chinese ? /收费有所不同.*工作人员/ : /priced differently.*staff/);
+        await f.journey.begin("customer"); await f.journey.select("customer", "RETURNING");
+        assert.equal(f.checks.length, 0);
+        await f.journey.select("customer", "HAS_PACKAGE");
+        assert.deepEqual(f.checks, ["customer"]);
+        assert.match(f.texts.at(-1), chinese ? /会员配套不适用/ : /membership packages do not apply/);
+    }
+});
+
+test("exclusive and premium remain distinct and only owned categories appear", async () => {
+    for (const routes of [["exclusive"], ["premium"], ["exclusive", "premium"], ["weekday", "weekend", "exclusive", "premium"]]) {
+        const f = fixture({ allowed_routes: routes });
+        await f.journey.begin("customer"); await f.journey.select("customer", "RETURNING");
+        await f.journey.select("customer", "HAS_PACKAGE"); await f.journey.select("customer", "PUBLIC");
+        assert.deepEqual(f.menus.at(-1).map(row => row.id), routes.map(route => "JOURNEY_" + route.toUpperCase()));
+    }
+});
 test("first-time public visitors use Monday–Thursday, 4–5:30 PM", async () => {
     const f = fixture(); await f.journey.begin("customer");
     await f.journey.select("customer", "FIRST");

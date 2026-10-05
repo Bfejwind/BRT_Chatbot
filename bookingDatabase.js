@@ -100,20 +100,26 @@ async function submitBooking(customerPhone) {
     if (draft.journey_step !== "dates" || !BOOKING_CONFIG.isRouteDateAllowed(draft.booking_date, draft.booking_route)) {
         throw new Error("Date is not allowed for this booking category");
     }
-    if (["weekday", "weekend", "premium"].includes(draft.booking_route)) {
+    const packageBooking = ["weekday", "weekend", "exclusive", "premium"].includes(draft.booking_route);
+    if (packageBooking && !draft.package_request_id) {
         const membership = await require("./packageService").getActivePackage(customerPhone);
         if (!membership?.allowed_routes.includes(draft.booking_route)) {
             throw new Error("Package is no longer active for this booking category");
         }
     }
     // Supabase performs the capacity check and reservation atomically.
+    if (packageBooking && !draft.package_request_id) {
+        draft.package_request_id = require("node:crypto").randomUUID();
+    }
     const { data: bookingId, error } = await supabase.rpc(
-        "reserve_booking",
+        packageBooking ? "reserve_package_booking" : "reserve_booking",
         {
             p_customer_phone: customerPhone,
             p_booking_date: draft.booking_date,
             p_booking_time: draft.booking_time,
-            p_party_size: draft.party_size
+            p_party_size: draft.party_size,
+            ...(packageBooking ? { p_booking_route: draft.booking_route,
+                p_request_id: draft.package_request_id } : {})
         }
     );
 

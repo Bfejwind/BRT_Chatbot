@@ -4,3 +4,4 @@ google-service-account.json
 .env.*
 !.env.example
 google-service-account.json
+/staff-packages/

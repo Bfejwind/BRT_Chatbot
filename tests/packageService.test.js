@@ -18,9 +18,9 @@ function fixture(rows, error) {
 }
 test("combines valid entitlements and excludes expired packages in Singapore time", async () => {
     const f = fixture([
-        { allowed_routes: ["premium"], expires_on: "2026-10-04" },
-        { allowed_routes: ["weekday"], expires_on: "2026-10-05" },
-        { allowed_routes: ["weekend", "weekday"], expires_on: null }
+        { allowed_routes: ["premium"], total_uses: 30, used_uses: 0, expires_on: "2026-10-04" },
+        { allowed_routes: ["weekday"], total_uses: 5, used_uses: 0, expires_on: "2026-10-05" },
+        { allowed_routes: ["weekend", "weekday"], total_uses: 5, used_uses: 0, expires_on: null }
     ]);
     const p = await f.getActivePackage("6591234567", new Date("2026-10-04T17:00:00Z"));
     assert.deepEqual(Array.from(p.allowed_routes), ["weekday", "weekend"]);
@@ -30,6 +30,15 @@ test("missing packages return null and database errors remain distinguishable", 
     assert.equal(await fixture([]).getActivePackage("customer"), null);
     const error = new Error("missing table");
     await assert.rejects(fixture(null, error).getActivePackage("customer"), e => e === error);
+});
+
+test("empty packages do not grant booking access", async () => {
+    const f = fixture([
+        { allowed_routes: ["premium"], total_uses: 30, used_uses: 30, expires_on: null },
+        { allowed_routes: ["exclusive"], total_uses: 10, used_uses: 9, expires_on: null }
+    ]);
+    assert.deepEqual(Array.from((await f.getActivePackage("customer")).allowed_routes), ["exclusive"]);
+    assert.equal(await fixture([{ allowed_routes: ["weekday"], total_uses: 5, used_uses: 5 }]).getActivePackage("customer"), null);
 });
 
 test("final reservation rejects a package revoked after category selection", async () => {

@@ -594,9 +594,14 @@ async function handleBooking(from) {
 async function sendBookingJourneyButtons(to, text, options) {
     await postWhatsApp("https://waba-v2.360dialog.io/messages", {
         messaging_product: "whatsapp", to, type: "interactive",
-        interactive: { type: "button", body: { text }, action: {
-            buttons: options.map(reply => ({ type: "reply", reply }))
-        } }
+        interactive: options.length > 3
+            ? { type: "list", body: { text }, action: {
+                button: getLanguage(to) === "zh" ? "选择类别" : "Choose category",
+                sections: [{ rows: options }]
+            } }
+            : { type: "button", body: { text }, action: {
+                buttons: options.map(reply => ({ type: "reply", reply }))
+            } }
     }, { headers: { "D360-API-KEY": process.env.WHATSAPP_API_KEY } });
 }
 function getBookingDates(now = new Date()) {
@@ -1115,6 +1120,13 @@ async function handleBookingConfirm(from) {
         if (error.isWhatsAppSendError) throw error;
 
         const errorText = error.message || "";
+
+        if (/PACKAGE_NO_USES|Package is no longer active/.test(errorText)) {
+            await sendMessage(from, isChinese
+                ? "您的配套已无剩余次数或已失效，请联系工作人员或重新开始预约。"
+                : "Your package has no remaining uses or is no longer active. Please contact staff or start a new booking.");
+            return;
+        }
 
         if (errorText.includes("NOT_ENOUGH_PLACES")) {
             await sendMessage(
