@@ -15,6 +15,7 @@ const {
 } = require("./messageDeduplication");
 const {
     getUpcomingEvents,
+    getEventsForDay,
     getAvailableSlots,
     createBookingEvent,
     createSessionEvent,
@@ -76,6 +77,7 @@ const {
     getBookingById,
     rejectBooking,
     getSessionAvailability,
+    getSessionAvailabilityRange,
     markSessionCalendarSynced,
     getBookingSession
 } = require("./bookingDatabase");
@@ -601,7 +603,8 @@ function getBookingDates(now = new Date()) {
 }
 
 async function sendAvailableDates(to, page = 0) {
-    if (!getBookingDates().length) {
+    const dates = await getSelectableBookingDates();
+    if (!dates.length) {
         await sendMessage(to, getLanguage(to) === "zh"
             ? "目前没有可预约日期，请联系工作人员。"
             : "There are currently no bookable dates. Please contact staff.");
@@ -616,7 +619,7 @@ async function sendAvailableDates(to, page = 0) {
             return;
         }
         const payload = createDateFlowMessage({
-            to, draft, dates: getBookingDates(),
+            to, draft, dates,
             flowId: process.env.WHATSAPP_BOOKING_DATE_FLOW_ID,
             isChinese: getLanguage(to) === "zh"
         });
@@ -630,7 +633,6 @@ async function sendAvailableDates(to, page = 0) {
     // Keep booking available until the calendar Flow is published and configured.
     try {
         const isChinese = getLanguage(to) === "zh";
-        const dates = getBookingDates();
         // Eight dates leave room for both navigation rows in a ten-row list.
         const pageSize = 8;
         const lastPage = Math.ceil(dates.length / pageSize) - 1;
@@ -704,11 +706,31 @@ async function sendAvailableDates(to, page = 0) {
         throw error;
     }
 }
-async function getBookableSlots(date, partySize = 1) {
+async function getSelectableBookingDates() {
+    const dates = getBookingDates();
+    if (!dates.length) return [];
+    // Fetch the whole window once, rather than issuing hundreds of API calls.
+    const end = new Date(`${dates.at(-1)}T00:00:00+08:00`);
+    end.setUTCDate(end.getUTCDate() + 1);
+    const [sessions, calendarEvents] = await Promise.all([
+        getSessionAvailabilityRange(dates[0], dates.at(-1)),
+        getEventsForDay(new Date(`${dates[0]}T00:00:00+08:00`), end)
+    ]);
+    const selectable = [];
+    for (const date of dates) {
+        const slots = await getBookableSlots(date, 1, {
+            sessions: sessions.filter(session => session.booking_date === date), calendarEvents
+        });
+        if (slots.length) selectable.push(date);
+    }
+    return selectable;
+}
+
+async function getBookableSlots(date, partySize = 1, snapshot) {
     if (!getBookingDates().includes(date)) {
         return [];
     }
-    const sessions = await getSessionAvailability(date);
+    const sessions = snapshot ? snapshot.sessions : await getSessionAvailability(date);
 
     const slots = [];
 
@@ -729,7 +751,8 @@ async function getBookableSlots(date, partySize = 1) {
         const hasConflict = await hasExternalCalendarConflict({
             bookingDate: date,
             bookingTime: time,
-            sessionId: session?.id
+            sessionId: session?.id,
+            calendarEvents: snapshot?.calendarEvents
         });
 
         if (hasConflict) {

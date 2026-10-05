@@ -203,6 +203,19 @@ async function getSessionAvailability(bookingDate) {
 
     return data || [];
 }
+async function getSessionAvailabilityRange(firstDate, lastDate) {
+    const rows = [];
+    // Page explicitly: Supabase commonly caps a response at 1,000 rows.
+    for (let offset = 0; ; offset += 1000) {
+        const { data, error } = await supabase.from("booking_sessions")
+            .select("id, booking_date, booking_time, capacity, reserved_places")
+            .gte("booking_date", firstDate).lte("booking_date", lastDate)
+            .order("id").range(offset, offset + 999);
+        if (error) throw error;
+        rows.push(...(data || []));
+        if (!data || data.length < 1000) return rows;
+    }
+}
 async function markSessionCalendarSynced(sessionId, calendarEventId) {
     const { error } = await supabase.rpc(
         "mark_session_calendar_synced",
@@ -258,6 +271,7 @@ module.exports = {
     getBookingById,
     rejectBooking,
     getSessionAvailability,
+    getSessionAvailabilityRange,
     markSessionCalendarSynced,
     getUnsyncedSessions,
     getBookingSession

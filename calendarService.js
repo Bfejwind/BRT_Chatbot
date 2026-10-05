@@ -255,7 +255,8 @@ async function createSessionEvent({
 async function hasExternalCalendarConflict({
     bookingDate,
     bookingTime,
-    sessionId
+    sessionId,
+    calendarEvents
 }) {
     const start = getSessionStart(bookingDate, bookingTime);
 
@@ -264,7 +265,7 @@ async function hasExternalCalendarConflict({
         BOOKING_CONFIG.durationMinutes * 60_000
     );
 
-    const events = await getEventsForDay(
+    const events = calendarEvents || await getEventsForDay(
         new Date(`${bookingDate}T00:00:00+08:00`),
         new Date(`${bookingDate}T23:59:59+08:00`)
     );

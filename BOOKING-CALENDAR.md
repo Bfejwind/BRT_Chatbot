@@ -1,5 +1,13 @@
 # Calendar date selection
 
+Before each calendar is sent, the server loads session capacity and Google
+Calendar events for the three-month window. Dates with no available sessions
+are excluded alongside holidays; the Flow's `unavailable-dates` binding makes
+those dates unselectable. The fallback list also omits them. Availability can
+change after opening a calendar, so time selection and reservation recheck it.
+If the published Flow does not contain the `unavailable-dates` binding, publish
+the supplied JSON as a new Flow and configure its ID before deploying.
+
 Singapore public holidays and substitute Mondays in MOM's 2026 and 2027 lists
 are closed to booking. Dates are checked again before saving and reserving.
 Maintain the lists in `bookingSchedule.js` when MOM announces later years or

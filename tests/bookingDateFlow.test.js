@@ -7,6 +7,36 @@ const { createDateFlowMessage, readDateFlowReply } = require("../bookingDateFlow
 const flow = require("../flows/booking-date.json");
 const dates = ["2026-10-02", "2026-10-03", "2026-10-04"];
 
+test("calendar disables every excluded date between the selectable bounds", () => {
+    const payload = createDateFlowMessage({ to: "customer", draft: {},
+        dates: ["2026-11-07", "2026-11-10", "2026-11-12"], flowId: "test-flow" });
+    const data = payload.interactive.action.parameters.flow_action_payload.data;
+    assert.deepEqual(data.unavailable_dates, ["2026-11-08", "2026-11-09", "2026-11-11"]);
+    const picker = flow.screens[0].layout.children[0].children[0];
+    assert.equal(picker["unavailable-dates"], "${data.unavailable_dates}");
+});
+
+test("date availability excludes sold-out and blocked days but keeps partially full days", async () => {
+    const source = fs.readFileSync(path.join(__dirname, "../server.js"), "utf8");
+    const config = require("../bookingSchedule");
+    const sessions = config.startTimes.map(time => ({
+        booking_date: dates[0], booking_time: time, capacity: 10, reserved_places: 10
+    }));
+    sessions.push({ booking_date: dates[2], booking_time: "12:00", capacity: 10, reserved_places: 9 });
+    let databaseReads = 0, calendarReads = 0;
+    const context = vm.createContext({ BOOKING_CONFIG: config,
+        getBookingDates: () => dates,
+        getSessionAvailabilityRange: async () => { databaseReads++; return sessions; },
+        getEventsForDay: async () => { calendarReads++; return []; },
+        hasExternalCalendarConflict: async ({ bookingDate }) => bookingDate === dates[1]
+    });
+    vm.runInContext(source.slice(source.indexOf("async function getSelectableBookingDates("),
+        source.indexOf("async function sendAvailableTimes(")), context);
+    assert.deepEqual(Array.from(await context.getSelectableBookingDates()), [dates[2]]);
+    assert.equal(databaseReads, 1);
+    assert.equal(calendarReads, 1);
+});
+
 function fixture(isChinese = false) {
     const draft = {};
     const payload = createDateFlowMessage({ to: "customer", draft, dates,
