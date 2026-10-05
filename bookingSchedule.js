@@ -17,9 +17,18 @@ function formatSessionHours(time, isChinese = false) {
     });
     return `${format(start)} - ${format(end)} (${isChinese ? "新加坡时间" : "Singapore time"})`;
 }
+function isRouteDateAllowed(date, route) {
+    if (!isBookableDate(date)) return false;
+    const day = new Date(`${date}T00:00:00+08:00`)
+        .toLocaleDateString("en-US", { timeZone: "Asia/Singapore", weekday: "short" });
+    if (route === "first_public" || route === "weekday") return ["Mon", "Tue", "Wed", "Thu"].includes(day);
+    if (route === "weekend") return ["Fri", "Sat", "Sun"].includes(day);
+    return route === "premium" || route === "no_package";
+}
 module.exports = Object.freeze({
+    isRouteDateAllowed,
     isBookableDate,
     formatSessionHours,
-    startTimes: Object.freeze(["12:00", "14:00", "16:00"]),
+    startTimes: Object.freeze(["16:00"]),
     durationMinutes: 90
 });

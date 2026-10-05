@@ -82,6 +82,14 @@ const {
     getBookingSession
 } = require("./bookingDatabase");
 const crypto = require("node:crypto");
+const { createBookingJourney } = require("./bookingJourney");
+const { getActivePackage } = require("./packageService");
+const bookingJourney = createBookingJourney({
+    getDraft, startBooking, checkPackage: getActivePackage,
+    sendButtons: sendBookingJourneyButtons, sendMessage, notifyStaff,
+    showDates: sendAvailableDates, showMainMenu: sendMainMenu,
+    isChinese: from => getLanguage(from) === "zh"
+});
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -581,9 +589,15 @@ async function sendFAQDocument(to) {
 }
 
 async function handleBooking(from) {
-    await startBooking(from);
-
-    await sendAvailableDates(from);
+    await bookingJourney.begin(from);
+}
+async function sendBookingJourneyButtons(to, text, options) {
+    await postWhatsApp("https://waba-v2.360dialog.io/messages", {
+        messaging_product: "whatsapp", to, type: "interactive",
+        interactive: { type: "button", body: { text }, action: {
+            buttons: options.map(reply => ({ type: "reply", reply }))
+        } }
+    }, { headers: { "D360-API-KEY": process.env.WHATSAPP_API_KEY } });
 }
 function getBookingDates(now = new Date()) {
     const today = now.toLocaleDateString("en-CA", { timeZone: "Asia/Singapore" });
@@ -605,7 +619,12 @@ function getBookingDates(now = new Date()) {
 }
 
 async function sendAvailableDates(to, page = 0) {
-    const dates = await getSelectableBookingDates();
+    const routeDraft = await getDraft(to);
+    if (routeDraft?.journey_step !== "dates" || !routeDraft.booking_route) {
+        await handleBooking(to);
+        return;
+    }
+    const dates = await getSelectableBookingDates(routeDraft.booking_route);
     if (!dates.length) {
         await sendMessage(to, getLanguage(to) === "zh"
             ? "目前没有可预约日期，请联系工作人员。"
@@ -708,8 +727,8 @@ async function sendAvailableDates(to, page = 0) {
         throw error;
     }
 }
-async function getSelectableBookingDates() {
-    const dates = getBookingDates();
+async function getSelectableBookingDates(route) {
+    const dates = getBookingDates().filter(date => !route || BOOKING_CONFIG.isRouteDateAllowed(date, route));
     if (!dates.length) return [];
     // Fetch the whole window once, rather than issuing hundreds of API calls.
     const end = new Date(`${dates.at(-1)}T00:00:00+08:00`);
@@ -1515,6 +1534,13 @@ async function handleBookingDate(from, selectionId) {
         return;
     }
 
+    if (draft.journey_step !== "dates" || !BOOKING_CONFIG.isRouteDateAllowed(date, draft.booking_route)) {
+        await sendMessage(from, isChinese
+            ? "此日期不适用于您的预约类别，请重新选择。"
+            : "That date is not available for your booking category. Please choose again.");
+        await sendAvailableDates(from);
+        return;
+    }
     await saveBookingDate(from, date);
 
     console.log("Selected booking date:", date);
@@ -2030,6 +2056,10 @@ async function handleInteractiveMessage(from, message) {
         return;
     }
 
+    if (selectionId.startsWith("JOURNEY_")) {
+        await bookingJourney.select(from, selectionId.slice("JOURNEY_".length));
+        return;
+    }
     if (selectionId.startsWith("BOOK_SIZE_")) {
         await handleBookingPartySize(from, selectionId);
         return;

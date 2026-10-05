@@ -39,10 +39,10 @@ function calendarFixture(events = [], insertError) {
     return { ...context.module.exports, writes };
 }
 
-test("calendar offers only the three 90-minute sessions", async () => {
+test("calendar offers only the 4 PM 90-minute session", async () => {
     const slots = await calendarFixture().getAvailableSlots("2026-10-02");
     assert.deepEqual(Array.from(slots, s => s.start.toISOString()), [
-        "2026-10-02T04:00:00.000Z", "2026-10-02T06:00:00.000Z", "2026-10-02T08:00:00.000Z"
+        "2026-10-02T08:00:00.000Z"
     ]);
     for (const slot of slots) assert.equal(slot.end - slot.start, 90 * 60_000);
 });
@@ -84,9 +84,9 @@ test("customer menu uses the same schedule, full ranges, and valid row lengths",
     vm.runInContext(source.slice(start, end), context);
     await context.sendAvailableTimes("customer", "2026-10-02");
     const rows = payloads[0].interactive.action.sections[0].rows;
-    assert.deepEqual(Array.from(rows, r => r.id), ["BOOK_TIME_12:00", "BOOK_TIME_14:00", "BOOK_TIME_16:00"]);
+    assert.deepEqual(Array.from(rows, r => r.id), ["BOOK_TIME_16:00"]);
     assert.deepEqual(Array.from(rows, r => r.title), [
-        "12:00 PM - 1:30 PM", "2:00 PM - 3:30 PM", "4:00 PM - 5:30 PM"
+        "4:00 PM - 5:30 PM"
     ]);
     context.getLanguage = () => "zh";
     await context.sendAvailableTimes("customer", "2026-10-02");
@@ -100,9 +100,10 @@ test("booking persistence rejects old 1 PM and 3 PM options", async () => {
         name === "./bookingSchedule" ? config : {} };
     vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../bookingDatabase.js"), "utf8"), context);
     const db = context.module.exports;
-    await db.startBooking("customer");
+    const draft = await db.startBooking("customer");
+    draft.booking_route = "no_package"; draft.journey_step = "dates";
     await db.saveBookingDate("customer", "2026-10-02");
-    for (const time of ["13:00", "15:00", "17:00"]) {
+    for (const time of ["12:00", "13:00", "14:00", "15:00", "17:00"]) {
         await assert.rejects(db.saveBookingTime("customer", time), /Invalid booking session time/);
     }
     for (const time of config.startTimes) await db.saveBookingTime("customer", time);

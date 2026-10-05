@@ -35,8 +35,8 @@ test("booking handlers propagate delivery failures without sending a misleading 
 });
 
 test("every active server message request uses the shared sender", () => {
-    assert.equal((source.match(/https:\/\/waba-v2\.360dialog\.io\/messages/g) || []).length, 16);
-    assert.equal((source.match(/postWhatsApp\(\s*"https:\/\/waba-v2\.360dialog\.io\/messages"/g) || []).length, 16);
+    assert.equal((source.match(/https:\/\/waba-v2\.360dialog\.io\/messages/g) || []).length, 17);
+    assert.equal((source.match(/postWhatsApp\(\s*"https:\/\/waba-v2\.360dialog\.io\/messages"/g) || []).length, 17);
     assert.ok(!/axios\.post\([^\n]*messages/.test(source));
 });
 

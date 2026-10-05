@@ -32,6 +32,10 @@ async function saveBookingDate(customerPhone, date) {
         throw new Error("Booking draft not found");
     }
 
+    if (draft.journey_step !== "dates" || !BOOKING_CONFIG.isRouteDateAllowed(date, draft.booking_route)) {
+        throw new Error("Date is not allowed for this booking category");
+    }
+
     draft.booking_date = date;
     draft.booking_time = null;
     draft.party_size = null;
@@ -47,6 +51,9 @@ async function saveBookingTime(customerPhone, time) {
 
     if (!draft || !draft.booking_date) {
         throw new Error("Booking date not selected");
+    }
+    if (!BOOKING_CONFIG.isRouteDateAllowed(draft.booking_date, draft.booking_route)) {
+        throw new Error("Date is not allowed for this booking category");
     }
 
     draft.booking_time = time;
@@ -89,6 +96,15 @@ async function submitBooking(customerPhone) {
 
     if (!BOOKING_CONFIG.isBookableDate(draft.booking_date)) {
         throw new Error("Booking is closed on Singapore public holidays or unverified years");
+    }
+    if (draft.journey_step !== "dates" || !BOOKING_CONFIG.isRouteDateAllowed(draft.booking_date, draft.booking_route)) {
+        throw new Error("Date is not allowed for this booking category");
+    }
+    if (["weekday", "weekend", "premium"].includes(draft.booking_route)) {
+        const membership = await require("./packageService").getActivePackage(customerPhone);
+        if (!membership?.allowed_routes.includes(draft.booking_route)) {
+            throw new Error("Package is no longer active for this booking category");
+        }
     }
     // Supabase performs the capacity check and reservation atomically.
     const { data: bookingId, error } = await supabase.rpc(
