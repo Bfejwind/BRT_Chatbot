@@ -1,10 +1,10 @@
 // Booking questions are handled before the date/calendar stage.
 function createBookingJourney({ getDraft, startBooking, checkPackage, sendButtons,
-    sendMessage, notifyStaff, showDates, showMainMenu, isChinese }) {
-    async function ask(from, en, zh, options) {
+    sendMessage, notifyStaff, showDates, showMainMenu, isChinese, ceremonyPrices }) {
+    async function ask(from, en, zh, options, imageUrl) {
         await sendButtons(from, isChinese(from) ? zh : en, options.map(([id, en, zh]) => ({
             id: `JOURNEY_${id}`, title: isChinese(from) ? zh : en
-        })));
+        })), imageUrl);
     }
     async function bookingType(from) {
         const draft = await getDraft(from);
@@ -20,9 +20,9 @@ function createBookingJourney({ getDraft, startBooking, checkPackage, sendButton
             ]);
     }
     async function purchase(from) {
-        await ask(from, "Would you like to purchase a package?", "您想购买配套吗？", [
-            ["BUY", "Yes, contact staff", "是，联系工作人员"], ["NO_BUY", "No, book a session", "否，预约场次"]
-        ]);
+        await ask(from, "Would you like to purchase a package?\n\nIf you prefer not to purchase a package, our staff will be happy to help arrange a private session. Membership packages do not apply to private bookings, and pricing is different.", "您想购买配套吗？\n\n若您暂时不想购买配套，我们的工作人员很乐意协助您安排私人场次。会员配套不适用于私人预约，收费也有所不同。", [
+            ["BUY", "Yes, contact staff", "是，联系工作人员"], ["NO_BUY", "No, private booking", "否，预约私人场次"]
+        ], ceremonyPrices);
     }
     async function select(from, choice) {
         const draft = await getDraft(from);
@@ -93,8 +93,11 @@ function createBookingJourney({ getDraft, startBooking, checkPackage, sendButton
             return showMainMenu(from);
         }
         if (choice === "NO_BUY" && draft.journey_step === "purchase") {
-            draft.booking_route = "no_package"; draft.journey_step = "dates";
-            return showDates(from);
+            draft.journey_step = "staff";
+            await notifyStaff(from, "Customer declined to purchase a package and requests a private tea session. Please assist with arrangements and pricing.");
+            return sendMessage(from, isChinese(from)
+                ? "我们已通知工作人员协助您安排私人场次。会员配套不适用于私人预约，收费也有所不同。欢迎在此发送您希望预约的日期、时间及人数，我们会尽快回复您并介绍价格。"
+                : "We've notified our staff to help arrange your private session. Membership packages do not apply to private bookings, and pricing is different. Please send your preferred date, time and group size here, and our team will get back to you as soon as possible with the pricing and arrangements.");
         }
         return sendMessage(from, isChinese(from) ? "此选项已失效，请重新开始预约。" : "That option has expired. Please start a new booking.");
     }

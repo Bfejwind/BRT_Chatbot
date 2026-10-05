@@ -88,6 +88,7 @@ const bookingJourney = createBookingJourney({
     getDraft, startBooking, checkPackage: getActivePackage,
     sendButtons: sendBookingJourneyButtons, sendMessage, notifyStaff,
     showDates: sendAvailableDates, showMainMenu: sendMainMenu,
+    ceremonyPrices: images.ceremonyPrices,
     isChinese: from => getLanguage(from) === "zh"
 });
 function sleep(ms) {
@@ -591,7 +592,7 @@ async function sendFAQDocument(to) {
 async function handleBooking(from) {
     await bookingJourney.begin(from);
 }
-async function sendBookingJourneyButtons(to, text, options) {
+async function sendBookingJourneyButtons(to, text, options, imageUrl) {
     await postWhatsApp("https://waba-v2.360dialog.io/messages", {
         messaging_product: "whatsapp", to, type: "interactive",
         interactive: options.length > 3
@@ -601,7 +602,7 @@ async function sendBookingJourneyButtons(to, text, options) {
             } }
             : { type: "button", body: { text }, action: {
                 buttons: options.map(reply => ({ type: "reply", reply }))
-            } }
+            }, ...(imageUrl ? { header: { type: "image", image: { link: imageUrl } } } : {}) }
     }, { headers: { "D360-API-KEY": process.env.WHATSAPP_API_KEY } });
 }
 function getBookingDates(now = new Date()) {

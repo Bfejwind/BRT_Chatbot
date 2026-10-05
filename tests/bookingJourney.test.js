@@ -4,15 +4,16 @@ const { createBookingJourney } = require("../bookingJourney");
 const schedule = require("../bookingSchedule");
 function fixture(membership = null, chinese = false) {
     let draft;
-    const menus = [], staff = [], dates = [], texts = [], messages = [], checks = [];
+    const menus = [], staff = [], dates = [], texts = [], messages = [], checks = [], images = [];
     const journey = createBookingJourney({
         startBooking: async () => (draft = {}), getDraft: async () => draft,
         checkPackage: async from => { checks.push(from); return membership; }, isChinese: () => chinese,
-        sendButtons: async (from, text, options) => { menus.push(options); texts.push(text); },
+        ceremonyPrices: "https://example.test/CeremonyPrices.jpg",
+        sendButtons: async (from, text, options, image) => { menus.push(options); texts.push(text); images.push(image); },
         sendMessage: async (from, text) => messages.push(text), notifyStaff: async (...args) => staff.push(args),
         showDates: async () => dates.push(draft.booking_route), showMainMenu: async () => {}
     });
-    return { journey, menus, staff, dates, texts, messages, checks, draft: () => draft };
+    return { journey, menus, staff, dates, texts, messages, checks, images, draft: () => draft };
 }
 
 test("private pricing explanation accompanies the button in both languages", async () => {
@@ -57,12 +58,24 @@ test("package category buttons and selections enforce verified entitlements", as
     assert.equal(schedule.isRouteDateAllowed("2026-10-09", "weekend"), true);
     assert.equal(schedule.isRouteDateAllowed("2026-10-08", "weekend"), false);
 });
-test("unverified returning visitors decline purchase and can book any nonholiday day", async () => {
-    const f = fixture(); await f.journey.begin("customer");
-    await f.journey.select("customer", "RETURNING"); await f.journey.select("customer", "HAS_PACKAGE");
-    await f.journey.select("customer", "NO_BUY"); assert.deepEqual(f.dates, ["no_package"]);
-    assert.equal(schedule.isRouteDateAllowed("2026-10-09", "no_package"), true);
-    assert.equal(schedule.isRouteDateAllowed("2026-11-09", "no_package"), false);
+test("declining package purchase sends a private request to staff in both languages", async () => {
+    for (const chinese of [false, true]) {
+        for (const answer of ["HAS_PACKAGE", "NO_PACKAGE"]) {
+            const f = fixture(null, chinese); await f.journey.begin("customer");
+            await f.journey.select("customer", "RETURNING"); await f.journey.select("customer", answer);
+            assert.match(f.menus.at(-1).find(row => row.id === "JOURNEY_NO_BUY").title, chinese ? /私人/ : /private/);
+            assert.equal(f.images.at(-1), "https://example.test/CeremonyPrices.jpg");
+            await f.journey.select("customer", "NO_BUY");
+            assert.deepEqual(f.dates, []);
+            assert.equal(f.draft().journey_step, "staff");
+            assert.equal(f.draft().booking_route, undefined);
+            assert.equal(f.staff.length, 1);
+            assert.match(f.staff[0][1], /private tea session/);
+            assert.match(f.messages.at(-1), chinese ? /日期、时间及人数/ : /preferred date, time and group size/);
+            await f.journey.select("customer", "NO_BUY");
+            assert.equal(f.staff.length, 1);
+        }
+    }
 });
 test("private requests and package purchases go to staff without opening booking dates", async () => {
     const f = fixture(); await f.journey.begin("customer");
