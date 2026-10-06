@@ -488,7 +488,7 @@ async function sendMainMenu(to) {
                     body: {
                         text: isChinese
                             ? "请选择一个选项：\n发送“hi”或“hello”可返回语言选择。发送问题会转给工作人员，发送“Booking”可进入预约菜单。"
-                            : "Please select an option:\nSend “hi” or “hello” to return to language selection. Send a question to reach a staff member, or send “Booking” to open the booking menu."
+                            : "Please select an option:\nSelect Main Menu to view all options.\nSend a question to reach a staff member, \nSend “Booking” to open the booking menu.\nSend “hi” or “hello” to return to language selection."
                     },
 
                     action: {

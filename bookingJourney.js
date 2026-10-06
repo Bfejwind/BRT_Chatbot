@@ -92,7 +92,7 @@ function createBookingJourney({ getDraft, startBooking, checkPackage, sendButton
             draft.journey_step = "staff";
             await notifyStaff(from, "Customer wants to purchase a package.");
             await sendMessage(from, isChinese(from) ? "工作人员会协助您购买配套。购买完成后，请从主菜单重新预约。" : "Staff will help you purchase a package. Once complete, return to the main menu to book.");
-            return showMainMenu(from);
+            return;
         }
         if (choice === "NO_BUY" && draft.journey_step === "purchase") {
             draft.journey_step = "staff";
