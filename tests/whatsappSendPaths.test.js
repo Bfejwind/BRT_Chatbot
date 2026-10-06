@@ -29,6 +29,34 @@ test("confirmed bookings send staff the date, exact hours, package and party siz
         assert.ok(body.includes(route === "first_public" ? "$68 promotional" : route[0].toUpperCase() + route.slice(1)));
     }
 });
+test("customer follow-ups during staff handover are forwarded without automated replies", async () => {
+    const forwarded = [];
+    const run = handler("handleTextMessage", {
+        staffHandover: { isActive: () => true },
+        notifyStaff: async (...args) => forwarded.push(args),
+        sendMessage: async () => assert.fail("No automated acknowledgement"),
+        sendContactNavigation: async () => assert.fail("No automated menu"),
+        sendFAQDocument: async () => assert.fail("No FAQ during handover")
+    });
+    for (const text of ["A follow-up question?", "Thank you", "Hello, can you clarify the price?", "好的，谢谢"]) {
+        await run("customer", { text: { body: text } });
+    }
+    assert.equal(forwarded.length, 4);
+    assert.equal(forwarded[0][1], "A follow-up question?");
+});
+test("greetings can reopen the chatbot during staff handover", async () => {
+    let menus = 0;
+    const run = handler("handleTextMessage", {
+        staffHandover: { isActive: () => true },
+        getLanguage: () => "en", userLanguages: { customer: "en" },
+        sendLanguageMenu: async () => { menus++; },
+        notifyStaff: async () => assert.fail("Greetings should reopen the chatbot")
+    });
+    for (const text of ["Hi", "Hello!", "hey", "good morning", "你好", "您好！"]) {
+        await run("customer", { text: { body: text } });
+    }
+    assert.equal(menus, 6);
+});
 test("staff notification failure reaches the webhook instead of claiming success", async () => {
     const error = new Error("rate limit exhausted");
     const notify = handler("notifyStaff", {

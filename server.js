@@ -25,6 +25,8 @@ const {
 const userLanguages = {};
 const app = express();
 const pendingQuestions = {};
+const { createStaffHandover } = require("./staffHandover");
+const staffHandover = createStaffHandover();
 const interactionHandlers = {
     LANG_EN: handleEnglishLanguage,
     LANG_ZH: handleChineseLanguage,
@@ -1892,6 +1894,13 @@ async function handleQuestionStaff(from) {
 //Text Response Handler
 async function handleTextMessage(from, message) {
     const text = message.text.body.trim();
+    const handoverCommand = text.toLowerCase().replace(/[.,!?:;'"()，。！？]/g, "").trim();
+    const requestsChatbot = /^(hi|hello|hey|hiya|howdy|good morning|good afternoon|good evening|你好|您好|嗨|早上好|下午好|晚上好|booking)$/.test(handoverCommand);
+
+    if (staffHandover.isActive(from) && !requestsChatbot) {
+        await notifyStaff(from, text);
+        return;
+    }
 
     const language = getLanguage(from);
     const isChinese = language === "zh";
@@ -2149,6 +2158,12 @@ app.post(
 
             for (const entry of entries) {
                 for (const change of entry.changes || []) {
+                    if (change.field === "smb_message_echoes") {
+                        for (const customer of staffHandover.recordChange(change)) {
+                            console.log("Staff handover active for customer:", customer);
+                        }
+                        continue;
+                    }
                     const messages = change.value?.messages || [];
 
                     for (const message of messages) {
