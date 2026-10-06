@@ -552,7 +552,7 @@ async function sendMainMenu(to) {
 
 async function sendFAQDocument(to) {
     const isChinese = getLanguage(to) === "zh";
-    const filename = isChinese ? "FAQchi.pdf" : "FAQ.pdf";
+    const filename = isChinese ? "常见问题.pdf" : "FAQ.pdf";
     const pdf = await readFile(path.join(__dirname, "FAQ", filename));
     const form = new FormData();
     form.append("messaging_product", "whatsapp");
