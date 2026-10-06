@@ -469,7 +469,7 @@ async function sendMainMenu(to) {
             images.mainMenuBanner,
             isChinese
                 ? "欢迎！请问今天有什么可以帮到您？"
-                : "Welcome! How can we help you today?"
+                : "Welcome! How can we help you today? Please wait while the menu options load."
         );
 
         // The shared sender paces the menu after the banner.
