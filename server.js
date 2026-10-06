@@ -1115,7 +1115,6 @@ async function handleBookingConfirm(from) {
                 : `Your booking is confirmed!\n\nDate: ${booking.booking_date}\nTime: ${BOOKING_CONFIG.formatSessionHours(booking.booking_time, isChinese)}\nGroup size: ${booking.party_size}`
         );
 
-        await sendReminderTestOption(from, booking.id);
     } catch (error) {
         console.error("Booking confirmation error:", error);
         if (error.isWhatsAppSendError) throw error;
