@@ -71,7 +71,9 @@ test("declining package purchase sends a private request to staff in both langua
             assert.equal(f.draft().booking_route, undefined);
             assert.equal(f.staff.length, 1);
             assert.match(f.staff[0][1], /private tea session/);
-            assert.match(f.messages.at(-1), chinese ? /日期、时间及人数/ : /preferred date, time and group size/);
+            assert.equal(f.messages.at(-1), chinese
+                ? "感谢您的关注，工作人员会尽快回复您，协助安排您的私人场次。"
+                : "Thank you for your interest, a Staff member will reply as soon as possible to help arrange your private session");
             await f.journey.select("customer", "NO_BUY");
             assert.equal(f.staff.length, 1);
         }

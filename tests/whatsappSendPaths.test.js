@@ -12,6 +12,23 @@ function handler(name, globals) {
     return context[name];
 }
 
+test("confirmed bookings send staff the date, exact hours, package and party size", async () => {
+    const sends = [];
+    const notify = handler("sendConfirmedBookingToStaff", {
+        process: { env: { STAFF_PHONE_NUMBER: "6580583517" } },
+        BOOKING_CONFIG: require("../bookingSchedule"),
+        sendMessage: async (...args) => sends.push(args)
+    });
+    for (const route of ["weekday", "weekend", "exclusive", "premium", "first_public"]) {
+        await notify("6591234567", { id: "booking", booking_date: "2026-10-08", booking_time: "16:00", party_size: 3 }, route);
+        const [recipient, body] = sends.at(-1);
+        assert.equal(recipient, "6580583517");
+        assert.ok(body.includes("Date: 2026-10-08"));
+        assert.ok(body.includes(require("../bookingSchedule").formatSessionHours("16:00", false)));
+        assert.ok(body.includes("Number of people: 3"));
+        assert.ok(body.includes(route === "first_public" ? "$68 promotional" : route[0].toUpperCase() + route.slice(1)));
+    }
+});
 test("staff notification failure reaches the webhook instead of claiming success", async () => {
     const error = new Error("rate limit exhausted");
     const notify = handler("notifyStaff", {

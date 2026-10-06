@@ -64,7 +64,7 @@ function createBookingJourney({ getDraft, startBooking, checkPackage, sendButton
         if (choice === "PRIVATE" && draft.journey_step === "type") {
             draft.journey_step = "staff";
             await notifyStaff(from, "Customer requests a private tea session.");
-            return sendMessage(from, isChinese(from) ? "私人场次需由工作人员安排，我们会尽快回复您。" : "Staff will arrange your private session and reply as soon as possible.");
+            return sendMessage(from, isChinese(from) ? "感谢您的关注，工作人员会尽快回复您，协助安排您的私人场次。" : "Thank you for your interest, a Staff member will reply as soon as possible to help arrange your private session");
         }
         if (choice === "PUBLIC" && draft.journey_step === "type") {
             if (draft.first_visit) {
@@ -98,8 +98,8 @@ function createBookingJourney({ getDraft, startBooking, checkPackage, sendButton
             draft.journey_step = "staff";
             await notifyStaff(from, "Customer declined to purchase a package and requests a private tea session. Please assist with arrangements and pricing.");
             return sendMessage(from, isChinese(from)
-                ? "我们已通知工作人员协助您安排私人场次。会员配套不适用于私人预约，收费也有所不同。欢迎在此发送您希望预约的日期、时间及人数，我们会尽快回复您并介绍价格。"
-                : "We've notified our staff to help arrange your private session. Membership packages do not apply to private bookings, and pricing is different. Please send your preferred date, time and group size here, and our team will get back to you as soon as possible with the pricing and arrangements.");
+                ? "感谢您的关注，工作人员会尽快回复您，协助安排您的私人场次。"
+                : "Thank you for your interest, a Staff member will reply as soon as possible to help arrange your private session");
         }
         return sendMessage(from, isChinese(from) ? "此选项已失效，请重新开始预约。" : "That option has expired. Please start a new booking.");
     }

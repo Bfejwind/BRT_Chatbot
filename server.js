@@ -1115,6 +1115,15 @@ async function handleBookingConfirm(from) {
                 : `Your booking is confirmed!\n\nDate: ${booking.booking_date}\nTime: ${BOOKING_CONFIG.formatSessionHours(booking.booking_time, isChinese)}\nGroup size: ${booking.party_size}`
         );
 
+        // Notify staff after a successful booking, without asking them to approve
+        // a reservation that has already been confirmed.
+        try {
+            await sendConfirmedBookingToStaff(from, booking, draft.booking_route);
+        } catch (staffError) {
+            console.error("Confirmed booking staff notification failed:", booking.id,
+                staffError.response?.data || staffError.message);
+        }
+
     } catch (error) {
         console.error("Booking confirmation error:", error);
         if (error.isWhatsAppSendError) throw error;
@@ -1164,6 +1173,18 @@ async function handleBookingConfirm(from) {
     }
 }
 
+async function sendConfirmedBookingToStaff(customerPhone, booking, route) {
+    const packageTypes = {
+        weekday: "Weekday", weekend: "Weekend", exclusive: "Exclusive", premium: "Premium",
+        first_public: "None — $68 promotional public session", no_package: "None"
+    };
+    await sendMessage(process.env.STAFF_PHONE_NUMBER,
+        `Booking confirmed\n\nCustomer: +${customerPhone}\n` +
+        `Date: ${booking.booking_date}\n` +
+        `Time: ${BOOKING_CONFIG.formatSessionHours(booking.booking_time, false)}\n` +
+        `Package type: ${packageTypes[route] || "Not specified"}\n` +
+        `Number of people: ${booking.party_size}\nBooking ID: ${booking.id}`);
+}
 async function sendReminderTestOption(to, bookingId) {
     const isChinese = getLanguage(to) === "zh";
     await postWhatsApp("https://waba-v2.360dialog.io/messages", {
