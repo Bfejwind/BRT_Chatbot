@@ -41,19 +41,8 @@ test("empty packages do not grant booking access", async () => {
     assert.equal(await fixture([{ allowed_routes: ["weekday"], total_uses: 5, used_uses: 5 }]).getActivePackage("customer"), null);
 });
 
-test("final reservation rejects a package revoked after category selection", async () => {
-    const config = require("../bookingSchedule");
-    const context = { module: { exports: {} }, require: name =>
-        name === "./bookingSchedule" ? config : name === "./packageService"
-            ? { getActivePackage: async () => null }
-            : { rpc: async () => assert.fail("revoked package must not reserve") }
-    };
-    vm.runInNewContext(fs.readFileSync(`${__dirname}/../bookingDatabase.js`, "utf8"), context);
-    const db = context.module.exports;
-    const draft = await db.startBooking("customer");
-    draft.journey_step = "dates"; draft.booking_route = "weekday";
-    await db.saveBookingDate("customer", "2026-10-08");
-    await db.saveBookingTime("customer", "16:00");
-    await db.savePartySize("customer", 2);
-    await assert.rejects(db.submitBooking("customer"), /Package is no longer active/);
+test("database reservation enforces package validity through the session date", () => {
+    const migration = fs.readFileSync(`${__dirname}/../migrations/004_booking_reliability.sql`, 'utf8');
+    assert.match(migration, /expires_on >= p_booking_date/);
+    assert.match(migration, /public.reserve_package_booking\(p_customer_phone/);
 });

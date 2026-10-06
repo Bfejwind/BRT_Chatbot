@@ -96,12 +96,18 @@ test("customer menu uses the same schedule, full ranges, and valid row lengths",
 });
 
 test("booking persistence rejects old 1 PM and 3 PM options", async () => {
+    let saved;
+    const store = { from: () => ({
+        upsert: async row => { saved = structuredClone(row.draft); return {}; },
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({data:{draft:structuredClone(saved)}}) }) })
+    }) };
     const context = { module: { exports: {} }, require: name =>
-        name === "./bookingSchedule" ? config : {} };
+        name === "./bookingSchedule" ? config : name === "node:crypto" ? require("node:crypto") : store };
     vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../bookingDatabase.js"), "utf8"), context);
     const db = context.module.exports;
     const draft = await db.startBooking("customer");
     draft.booking_route = "no_package"; draft.journey_step = "dates";
+    await db.saveDraft(draft);
     await db.saveBookingDate("customer", "2026-10-02");
     for (const time of ["12:00", "13:00", "14:00", "15:00", "17:00"]) {
         await assert.rejects(db.saveBookingTime("customer", time), /Invalid booking session time/);

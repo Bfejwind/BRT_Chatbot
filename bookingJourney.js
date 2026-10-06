@@ -1,6 +1,6 @@
 // Booking questions are handled before the date/calendar stage.
 function createBookingJourney({ getDraft, startBooking, checkPackage, sendButtons,
-    sendMessage, notifyStaff, showDates, showMainMenu, isChinese, ceremonyPrices }) {
+    sendMessage, notifyStaff, showDates, showMainMenu, isChinese, ceremonyPrices, saveDraft = async () => {} }) {
     async function ask(from, en, zh, options, imageUrl) {
         await sendButtons(from, isChinese(from) ? zh : en, options.map(([id, en, zh]) => ({
             id: `JOURNEY_${id}`, title: isChinese(from) ? zh : en
@@ -27,14 +27,22 @@ function createBookingJourney({ getDraft, startBooking, checkPackage, sendButton
         ], ceremonyPrices);
     }
     async function select(from, choice) {
-        const draft = await getDraft(from);
+        let draft = await getDraft(from);
+        // These buttons request staff assistance, rather than reserving a slot.
+        // Recover a lost draft without restarting the first-visit questions.
+        if (!draft && ["PRIVATE", "NO_BUY"].includes(choice)) {
+            draft = await startBooking(from);
+            draft.journey_step = choice === "NO_BUY" ? "purchase" : "type";
+        }
         if (!draft) return begin(from);
         if (choice === "FIRST" && draft.journey_step === "first") {
             draft.first_visit = true; draft.journey_step = "type";
+            await saveDraft(draft);
             return bookingType(from);
         }
         if (choice === "RETURNING" && draft.journey_step === "first") {
             draft.first_visit = false; draft.journey_step = "package";
+            await saveDraft(draft);
             return ask(from, "Have you purchased a package with us?", "您曾向我们购买配套吗？", [
                 ["HAS_PACKAGE", "Yes", "是"], ["NO_PACKAGE", "No", "否"]
             ]);
@@ -50,6 +58,7 @@ function createBookingJourney({ getDraft, startBooking, checkPackage, sendButton
                     draft.package_verified = true;
                     draft.package_routes = verified.allowed_routes;
                     draft.journey_step = "type";
+                    await saveDraft(draft);
                     return bookingType(from);
                 }
                 draft.package_verified = false;
@@ -59,20 +68,24 @@ function createBookingJourney({ getDraft, startBooking, checkPackage, sendButton
                     : "We couldn't find a package available to use at the moment. It may have expired or have no visits left. Our staff will be happy to help check this for you, or you can purchase a new package.");
             }
             draft.journey_step = "purchase";
+            await saveDraft(draft);
             return purchase(from);
         }
-        if (choice === "PRIVATE" && draft.journey_step === "type") {
-            draft.journey_step = "staff";
+        if (choice === "PRIVATE" && ["type", "purchase"].includes(draft.journey_step)) {
             await notifyStaff(from, "Customer requests a private tea session.");
+            draft.journey_step = "staff";
+            await saveDraft(draft);
             return sendMessage(from, isChinese(from) ? "感谢您的关注，工作人员会尽快回复您，协助安排您的私人场次。" : "Thank you for your interest, a Staff member will reply as soon as possible to help arrange your private session");
         }
         if (choice === "PUBLIC" && draft.journey_step === "type") {
             if (draft.first_visit) {
                 draft.booking_route = "first_public"; draft.journey_step = "dates";
+                await saveDraft(draft);
                 return showDates(from);
             }
             if (draft.package_verified) {
                 draft.journey_step = "category";
+                await saveDraft(draft);
                 return ask(from, "Choose your public session category. All sessions are 4:00–5:30 PM.",
                     "请选择公众场次类别。所有场次均为16:00–17:30。", [
                         ["WEEKDAY", "Weekday (Mon–Thu)", "平日（周一至周四）"],
@@ -86,17 +99,20 @@ function createBookingJourney({ getDraft, startBooking, checkPackage, sendButton
             draft.journey_step === "category" && draft.package_verified &&
             draft.package_routes.includes(choice.toLowerCase())) {
             draft.booking_route = choice.toLowerCase(); draft.journey_step = "dates";
+            await saveDraft(draft);
             return showDates(from);
         }
         if (choice === "BUY" && draft.journey_step === "purchase") {
-            draft.journey_step = "staff";
             await notifyStaff(from, "Customer wants to purchase a package.");
+            draft.journey_step = "staff";
+            await saveDraft(draft);
             await sendMessage(from, isChinese(from) ? "工作人员会协助您购买配套。购买完成后，请从主菜单重新预约。" : "Staff will help you purchase a package. Once complete, return to the main menu to book.");
             return;
         }
         if (choice === "NO_BUY" && draft.journey_step === "purchase") {
-            draft.journey_step = "staff";
             await notifyStaff(from, "Customer declined to purchase a package and requests a private tea session. Please assist with arrangements and pricing.");
+            draft.journey_step = "staff";
+            await saveDraft(draft);
             return sendMessage(from, isChinese(from)
                 ? "感谢您的关注，工作人员会尽快回复您，协助安排您的私人场次。"
                 : "Thank you for your interest, a Staff member will reply as soon as possible to help arrange your private session");
@@ -106,6 +122,7 @@ function createBookingJourney({ getDraft, startBooking, checkPackage, sendButton
     async function begin(from) {
         const draft = await startBooking(from);
         draft.journey_step = "first";
+        await saveDraft(draft);
         await ask(from, "Is this your first time with us?", "这是您第一次到访吗？", [
             ["FIRST", "Yes, first visit", "是，首次到访"], ["RETURNING", "No, returning guest", "否，再次到访"]
         ]);

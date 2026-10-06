@@ -9,6 +9,6 @@ async function getActivePackage(customerPhone, now = new Date()) {
         Number.isInteger(row.total_uses) && Number.isInteger(row.used_uses) && row.used_uses < row.total_uses);
     const allowedRoutes = [...new Set(packages.flatMap(row => row.allowed_routes || []))]
         .filter(route => ["weekday", "weekend", "exclusive", "premium"].includes(route));
-    return allowedRoutes.length ? { allowed_routes: allowedRoutes } : null;
+    return allowedRoutes.length ? { allowed_routes: allowedRoutes, packages } : null;
 }
 module.exports = { getActivePackage };

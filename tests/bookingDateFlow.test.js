@@ -87,6 +87,7 @@ function handlerFixture(f) {
     let reopened = 0;
     const context = {
         getDraft: async () => f.draft,
+        saveDraft: async draft => { f.draft = draft; },
         getBookingDates: () => dates,
         getLanguage: () => "en",
         readDateFlowReply: (reply, draft, available) => readDateFlowReply(reply, draft, available, 2000),

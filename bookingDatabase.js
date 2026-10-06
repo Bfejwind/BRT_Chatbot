@@ -1,32 +1,25 @@
 const supabase = require("./supabaseClient");
 const BOOKING_CONFIG = require("./bookingSchedule");
 
-// Temporary development-only drafts.
-// These disappear when the server restarts.
-// We will replace them with persistent drafts before deployment.
-const drafts = new Map();
-
 async function getDraft(customerPhone) {
-    return drafts.get(customerPhone) || null;
+    const { data, error } = await supabase.from('booking_drafts').select('draft').eq('customer_phone', customerPhone).maybeSingle();
+    if (error) throw error;
+    return data?.draft || null;
 }
-
-async function startBooking(customerPhone) {
-    const draft = {
-        customer_phone: customerPhone,
-        booking_date: null,
-        booking_time: null,
-        party_size: null
-    };
-
-    drafts.set(customerPhone, draft);
+async function saveDraft(draft) {
+    const { error } = await supabase.from('booking_drafts').upsert({customer_phone:draft.customer_phone,draft,updated_at:new Date().toISOString()});
+    if (error) throw error;
     return draft;
+}
+async function startBooking(customerPhone) {
+    return saveDraft({customer_phone:customerPhone, booking_date:null, booking_time:null, party_size:null, package_request_id:require('node:crypto').randomUUID()});
 }
 
 async function saveBookingDate(customerPhone, date) {
     if (!BOOKING_CONFIG.isBookableDate(date)) {
         throw new Error("Booking is closed on Singapore public holidays or unverified years");
     }
-    const draft = drafts.get(customerPhone);
+    const draft = await getDraft(customerPhone);
 
     if (!draft) {
         throw new Error("Booking draft not found");
@@ -36,18 +29,20 @@ async function saveBookingDate(customerPhone, date) {
         throw new Error("Date is not allowed for this booking category");
     }
 
+    if (draft.reserved_booking_id) throw new Error('Booking already reserved; start a new booking to change details');
+    draft.package_request_id = require('node:crypto').randomUUID();
     draft.booking_date = date;
     draft.booking_time = null;
     draft.party_size = null;
 
-    return draft;
+    return saveDraft(draft);
 }
 
 async function saveBookingTime(customerPhone, time) {
     if (!BOOKING_CONFIG.startTimes.includes(time)) {
         throw new Error("Invalid booking session time");
     }
-    const draft = drafts.get(customerPhone);
+    const draft = await getDraft(customerPhone);
 
     if (!draft || !draft.booking_date) {
         throw new Error("Booking date not selected");
@@ -56,14 +51,16 @@ async function saveBookingTime(customerPhone, time) {
         throw new Error("Date is not allowed for this booking category");
     }
 
+    if (draft.reserved_booking_id) throw new Error('Booking already reserved; start a new booking to change details');
+    draft.package_request_id = require('node:crypto').randomUUID();
     draft.booking_time = time;
     draft.party_size = null;
 
-    return draft;
+    return saveDraft(draft);
 }
 
 async function savePartySize(customerPhone, partySize) {
-    const draft = drafts.get(customerPhone);
+    const draft = await getDraft(customerPhone);
 
     if (!draft || !draft.booking_date || !draft.booking_time) {
         throw new Error("Booking date or time not selected");
@@ -73,13 +70,15 @@ async function savePartySize(customerPhone, partySize) {
         throw new Error("Invalid party size");
     }
 
+    if (draft.reserved_booking_id) throw new Error('Booking already reserved; start a new booking to change details');
+    draft.package_request_id = require('node:crypto').randomUUID();
     draft.party_size = partySize;
 
-    return draft;
+    return saveDraft(draft);
 }
 
 async function submitBooking(customerPhone) {
-    const draft = drafts.get(customerPhone);
+    const draft = await getDraft(customerPhone);
 
     if (
         !draft ||
@@ -100,28 +99,16 @@ async function submitBooking(customerPhone) {
     if (draft.journey_step !== "dates" || !BOOKING_CONFIG.isRouteDateAllowed(draft.booking_date, draft.booking_route)) {
         throw new Error("Date is not allowed for this booking category");
     }
-    const packageBooking = ["weekday", "weekend", "exclusive", "premium"].includes(draft.booking_route);
-    if (packageBooking && !draft.package_request_id) {
-        const membership = await require("./packageService").getActivePackage(customerPhone);
-        if (!membership?.allowed_routes.includes(draft.booking_route)) {
-            throw new Error("Package is no longer active for this booking category");
-        }
+    if (!draft.package_request_id) {
+        draft.package_request_id = require('node:crypto').randomUUID();
+        await saveDraft(draft);
     }
-    // Supabase performs the capacity check and reservation atomically.
-    if (packageBooking && !draft.package_request_id) {
-        draft.package_request_id = require("node:crypto").randomUUID();
-    }
-    const { data: bookingId, error } = await supabase.rpc(
-        packageBooking ? "reserve_package_booking" : "reserve_booking",
-        {
-            p_customer_phone: customerPhone,
-            p_booking_date: draft.booking_date,
-            p_booking_time: draft.booking_time,
-            p_party_size: draft.party_size,
-            ...(packageBooking ? { p_booking_route: draft.booking_route,
-                p_request_id: draft.package_request_id } : {})
-        }
-    );
+    const { data: bookingId, error } = await supabase.rpc('reserve_booking_with_completion', {
+        p_customer_phone:customerPhone, p_booking_date:draft.booking_date,
+        p_booking_time:draft.booking_time, p_party_size:draft.party_size,
+        p_booking_route:draft.booking_route, p_request_id:draft.package_request_id,
+        p_language:draft.language || 'en'
+    });
 
     if (error) {
         throw error;
@@ -152,7 +139,8 @@ async function submitBooking(customerPhone) {
         );
     }
 
-    drafts.delete(customerPhone);
+    draft.reserved_booking_id = bookingId;
+    await saveDraft(draft);
 
     return {
         ...booking,
@@ -162,7 +150,9 @@ async function submitBooking(customerPhone) {
 }
 
 async function cancelDraft(customerPhone) {
-    return drafts.delete(customerPhone);
+    const { error } = await supabase.from('booking_drafts').delete().eq('customer_phone',customerPhone);
+    if (error) throw error;
+    return true;
 }
 
 async function getBookingById(bookingId) {
@@ -284,6 +274,7 @@ async function getBookingSession(sessionId) {
 }
 module.exports = {
     getDraft,
+    saveDraft,
     startBooking,
     saveBookingDate,
     saveBookingTime,

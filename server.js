@@ -70,6 +70,7 @@ const images = {
 };
 const {
     getDraft,
+    saveDraft,
     startBooking,
     saveBookingDate,
     saveBookingTime,
@@ -87,11 +88,28 @@ const crypto = require("node:crypto");
 const { createBookingJourney } = require("./bookingJourney");
 const { getActivePackage } = require("./packageService");
 const bookingJourney = createBookingJourney({
-    getDraft, startBooking, checkPackage: getActivePackage,
+    getDraft, startBooking: async from => { const draft = await startBooking(from); draft.language = getLanguage(from); return saveDraft(draft); }, saveDraft, checkPackage: getActivePackage,
     sendButtons: sendBookingJourneyButtons, sendMessage, notifyStaff,
     showDates: sendAvailableDates, showMainMenu: sendMainMenu,
     ceremonyPrices: images.ceremonyPrices,
     isChinese: from => getLanguage(from) === "zh"
+});
+const { createCompletionWorker, createSupabaseCompletionStore } = require('./bookingCompletion');
+const completeBookings = createCompletionWorker({
+    store:createSupabaseCompletionStore(require('./supabaseClient'),getBookingById),
+    synchronize:async booking => {
+        const event = await createSessionEvent({sessionId:booking.session_id,bookingDate:booking.booking_date,bookingTime:booking.booking_time});
+        await markSessionCalendarSynced(booking.session_id,event.id);
+        const session = await getBookingSession(booking.session_id);
+        await updateSessionEventOccupancy({calendarEventId:event.id,reservedPlaces:session.reserved_places,capacity:session.capacity});
+    },
+    sendCustomer:async (job,booking) => {
+        const chinese = job.language === 'zh';
+        await sendMessage(job.customer_phone,chinese
+            ? `????????\n\n???${booking.booking_date}\n???${BOOKING_CONFIG.formatSessionHours(booking.booking_time,true)}\n???${booking.party_size} ?`
+            : `Your booking is confirmed!\n\nDate: ${booking.booking_date}\nTime: ${BOOKING_CONFIG.formatSessionHours(booking.booking_time,false)}\nGroup size: ${booking.party_size}`);
+    },
+    sendStaff:async (job,booking) => { await sendConfirmedBookingToStaff(job.customer_phone,booking,job.route); }
 });
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -632,7 +650,12 @@ async function sendAvailableDates(to, page = 0) {
         await handleBooking(to);
         return;
     }
-    const dates = await getSelectableBookingDates(routeDraft.booking_route);
+    let dates = await getSelectableBookingDates(routeDraft.booking_route);
+    if (["weekday","weekend","exclusive","premium"].includes(routeDraft.booking_route)) {
+        const membership = await getActivePackage(to);
+        dates = dates.filter(date => membership?.packages.some(pkg =>
+            pkg.allowed_routes.includes(routeDraft.booking_route) && (!pkg.expires_on || date <= pkg.expires_on)));
+    }
     if (!dates.length) {
         await sendMessage(to, getLanguage(to) === "zh"
             ? "目前没有可预约日期，请联系工作人员。"
@@ -652,6 +675,7 @@ async function sendAvailableDates(to, page = 0) {
             flowId: process.env.WHATSAPP_BOOKING_DATE_FLOW_ID,
             isChinese: getLanguage(to) === "zh"
         });
+        await saveDraft(draft);
         await postWhatsApp(
             "https://waba-v2.360dialog.io/messages",
             payload,
@@ -1037,6 +1061,11 @@ async function handleBookingConfirm(from) {
             return;
         }
 
+        if (draft.reserved_booking_id) {
+            await completeBookings(draft.package_request_id);
+            return;
+        }
+        // Retry receipt lookup is handled atomically in Supabase.
         // 2. Find the existing session, if there is one.
         const sessions = await getSessionAvailability(
             draft.booking_date
@@ -1085,46 +1114,7 @@ async function handleBookingConfirm(from) {
             );
         }
 
-        // 5. Create or retrieve ONE shared Calendar event
-        // for this session.
-        const calendarEvent = await createSessionEvent({
-            sessionId: booking.session_id,
-            bookingDate: booking.booking_date,
-            bookingTime: booking.booking_time
-        });
-
-        // 6. Record the shared event ID in Supabase.
-        await markSessionCalendarSynced(
-            booking.session_id,
-            calendarEvent.id
-        );
-        
-        const session = await getBookingSession(
-            booking.session_id
-        );
-
-        await updateSessionEventOccupancy({
-            calendarEventId: calendarEvent.id,
-            reservedPlaces: session.reserved_places,
-            capacity: session.capacity
-        });
-
-        // 7. Confirm only after Calendar synchronization succeeds.
-        await sendMessage(
-            from,
-            isChinese
-                ? `您的预约已确认！\n\n日期：${booking.booking_date}\n时间：${BOOKING_CONFIG.formatSessionHours(booking.booking_time, isChinese)}\n人数：${booking.party_size} 位`
-                : `Your booking is confirmed!\n\nDate: ${booking.booking_date}\nTime: ${BOOKING_CONFIG.formatSessionHours(booking.booking_time, isChinese)}\nGroup size: ${booking.party_size}`
-        );
-
-        // Notify staff after a successful booking, without asking them to approve
-        // a reservation that has already been confirmed.
-        try {
-            await sendConfirmedBookingToStaff(from, booking, draft.booking_route);
-        } catch (staffError) {
-            console.error("Confirmed booking staff notification failed:", booking.id,
-                staffError.response?.data || staffError.message);
-        }
+        await completeBookings(draft.package_request_id);
 
     } catch (error) {
         console.error("Booking confirmation error:", error);
@@ -2081,8 +2071,12 @@ async function handleInteractiveMessage(from, message) {
             return;
         }
         await handleBookingDate(from, `BOOK_DATE_${date}`);
-        delete draft.date_flow_token;
-        delete draft.date_flow_expires_at;
+        const updatedDraft = await getDraft(from);
+        if (updatedDraft?.date_flow_token === draft.date_flow_token) {
+            delete updatedDraft.date_flow_token;
+            delete updatedDraft.date_flow_expires_at;
+            await saveDraft(updatedDraft);
+        }
         return;
     }
     let selectionId;
@@ -2215,6 +2209,15 @@ app.post(
                                 from
                             );
 
+                            // Restore the booking language along with its draft
+                            // after a restart or when another instance handles it.
+                            if (!userLanguages[from]) {
+                                const savedDraft = await getDraft(from);
+                                if (["en", "zh"].includes(savedDraft?.language)) {
+                                    userLanguages[from] = savedDraft.language;
+                                }
+                            }
+
                             if (message.type === "text") {
                                 await handleTextMessage(from, message);
                             }
@@ -2283,4 +2286,7 @@ app.post(
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     startBookingReminders();
+    const recover = () => completeBookings().catch(error => console.error('Booking recovery failed:',error.message));
+    void recover();
+    setInterval(recover,60_000).unref();
 });

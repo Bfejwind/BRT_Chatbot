@@ -6,7 +6,8 @@ function fixture(membership = null, chinese = false) {
     let draft;
     const menus = [], staff = [], dates = [], texts = [], messages = [], checks = [], images = [];
     const journey = createBookingJourney({
-        startBooking: async () => (draft = {}), getDraft: async () => draft,
+        startBooking: async () => (draft = {}), getDraft: async () => structuredClone(draft),
+        saveDraft: async value => { draft = structuredClone(value); },
         checkPackage: async from => { checks.push(from); return membership; }, isChinese: () => chinese,
         ceremonyPrices: "https://example.test/CeremonyPrices.jpg",
         sendButtons: async (from, text, options, image) => { menus.push(options); texts.push(text); images.push(image); },
@@ -29,6 +30,30 @@ test("private pricing explanation accompanies the button in both languages", asy
         assert.deepEqual(f.checks, ["customer"]);
         assert.match(f.texts.at(-1), chinese ? /会员配套不适用/ : /membership packages do not apply/);
     }
+});
+test("private buttons recover missing drafts without restarting booking questions", async () => {
+    for (const chinese of [false, true]) {
+        for (const choice of ["PRIVATE", "NO_BUY"]) {
+            const f = fixture(null, chinese);
+            await f.journey.select("customer", choice);
+            assert.equal(f.menus.length, 0);
+            assert.equal(f.dates.length, 0);
+            assert.equal(f.staff.length, 1);
+            assert.match(f.staff[0][1], /private tea session/);
+            assert.equal(f.draft().journey_step, "staff");
+            assert.match(f.messages.at(-1), chinese ? /协助安排您的私人场次/ : /help arrange your private session/);
+        }
+    }
+});
+test("private button from the purchase step also hands off to staff", async () => {
+    const f = fixture();
+    await f.journey.begin("customer");
+    await f.journey.select("customer", "RETURNING");
+    await f.journey.select("customer", "NO_PACKAGE");
+    await f.journey.select("customer", "PRIVATE");
+    assert.equal(f.staff.length, 1);
+    assert.equal(f.draft().journey_step, "staff");
+    assert.equal(f.dates.length, 0);
 });
 
 test("exclusive and premium remain distinct and only owned categories appear", async () => {

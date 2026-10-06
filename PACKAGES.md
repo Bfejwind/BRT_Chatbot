@@ -58,24 +58,21 @@ Add a package after staff verifies purchase:
 ```sql
 insert into public.customer_packages
     (customer_phone, package_name, package_type, allowed_routes, total_uses, expires_on)
-values ('6591234567', 'Weekday package', 'weekday', array['weekday'], 5, '2027-12-31');
+values ('6591234567', 'Weekday package', 'weekday', array['weekday'], 5, null);
 ```
 
 Use `array['weekend']` for Friday–Sunday, `array['premium']` for Monday–Sunday,
 or `array['exclusive']` for an exclusive package. Set `package_type` and
-`total_uses` according to the table above. Set `expires_on` to null for no expiry. Multiple active
+`total_uses` according to the table above. Migration 004 calculates expiry automatically: Weekday/Weekend have no expiry; Exclusive expires three calendar months after creation, and Premium six calendar months. Multiple active
 packages combine their allowed categories. Expiry is inclusive in Singapore time.
 
-Renew or disable a particular record using its UUID from the Table Editor:
+When a customer buys another package, add a new package through the website.
+Do not extend an existing package by editing its expiry: validity is enforced from
+`created_at`. For historical purchases, correct `created_at` to the purchase date.
+Booking dates must be on or before the inclusive expiry date in Singapore time.
 
-Changing the expiry date does not reset used credits. When a customer buys
-another package, add a new package through the website instead.
-
+To disable a package:
 ```sql
-update public.customer_packages
-set expires_on = '2028-12-31', active = true
-where id = 'REPLACE_WITH_PACKAGE_UUID';
-
 update public.customer_packages set active = false
 where id = 'REPLACE_WITH_PACKAGE_UUID';
 ```
@@ -95,3 +92,23 @@ arranged by staff. Existing bookings and their reminders are left intact.
 
 This implementation tracks booking uses, but does not process payment or
 automatically manage private-session capacity. First-visit status is customer supplied.
+
+## Booking reliability and validity upgrade
+
+Before deploying this version, run `migrations/004_booking_reliability.sql` in
+Supabase after migrations 001?003. It creates persistent drafts and completion
+jobs, and applies package validity rules to existing records using `created_at`.
+Review historical purchase dates first. No expiry applies to Weekday/Weekend;
+Exclusive uses 3 calendar months and Premium 6 calendar months. The global
+booking window remains three months ahead.
+
+Confirmed reservations and package deductions happen atomically with a recovery
+job. The server resumes Calendar synchronization, customer confirmation and staff
+notification every minute and on startup, without reserving again. Explicit API
+rejections retry every minute. Ambiguous sends (`unknown`) require checking delivery
+before resetting the job to `pending`; interrupted message sends also require
+review. Calendar recovery is safe to retry because event IDs are deterministic.
+
+Inspect `booking_completion_jobs` in Supabase for `last_error`, `stage` and
+`status`. A `done` job means API acceptance, not proof of delivery. Ordinary staff
+messages still require an active WhatsApp messaging window.
