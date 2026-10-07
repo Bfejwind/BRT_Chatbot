@@ -4,8 +4,6 @@ const express = require("express");
 const axios = require("axios");
 const { createDateFlowMessage, readDateFlowReply } = require("./bookingDateFlow");
 const BOOKING_CONFIG = require("./bookingSchedule");
-const { readFile } = require("node:fs/promises");
-const path = require("node:path");
 const { postWhatsApp } = require("./whatsappSender");
 const { startBookingReminders, reminderPayload } = require("./bookingReminders");
 const {
@@ -32,6 +30,7 @@ const interactionHandlers = {
     LANG_ZH: handleChineseLanguage,
     // Main Menu
     FAQ: handleFAQ,
+    DIRECTIONS: handleDirections,
     THINGS_TO_NOTE: handleThingsToNote,
     BOOKING: handleBooking,
     CONTACT: handleContact,
@@ -66,6 +65,10 @@ const images = {
 
     ceremonyPrices:
         "https://ixjmzksmazysazlyoxne.supabase.co/storage/v1/object/public/chatbot-images/CeremonyPrices.jpg",
+    faqEnglish: "https://ixjmzksmazysazlyoxne.supabase.co/storage/v1/object/public/chatbot-images/FAQ.pdf",
+    faqChinese: "https://ixjmzksmazysazlyoxne.supabase.co/storage/v1/object/public/chatbot-images/FAQChinese.pdf",
+    directionsPDF: "https://ixjmzksmazysazlyoxne.supabase.co/storage/v1/object/public/chatbot-images/Getting%20to%20the%20RROYCE%20Building.pdf.pdf",
+    introductionVideo: "https://ixjmzksmazysazlyoxne.supabase.co/storage/v1/object/public/chatbot-images/IntroductionVideoWhatsApp.mp4",
 
 };
 const {
@@ -106,7 +109,7 @@ const completeBookings = createCompletionWorker({
     sendCustomer:async (job,booking) => {
         const chinese = job.language === 'zh';
         await sendMessage(job.customer_phone,chinese
-            ? `????????\n\n???${booking.booking_date}\n???${BOOKING_CONFIG.formatSessionHours(booking.booking_time,true)}\n???${booking.party_size} ?`
+            ? `您的预约已确认！\n\n日期：${booking.booking_date}\n时间：${BOOKING_CONFIG.formatSessionHours(booking.booking_time,true)}\n人数：${booking.party_size} 位`
             : `Your booking is confirmed!\n\nDate: ${booking.booking_date}\nTime: ${BOOKING_CONFIG.formatSessionHours(booking.booking_time,false)}\nGroup size: ${booking.party_size}`);
     },
     sendStaff:async (job,booking) => { await sendConfirmedBookingToStaff(job.customer_phone,booking,job.route); }
@@ -540,6 +543,10 @@ async function sendMainMenu(to) {
                                             : "📅 Book a Visit"
                                     },
                                     {
+                                        id: "DIRECTIONS",
+                                        title: isChinese ? "📍 交通指引" : "📍 Directions"
+                                    },
+                                    {
                                         id: "CONTACT",
                                         title: isChinese
                                             ? "📞 联系我们"
@@ -572,34 +579,13 @@ async function sendMainMenu(to) {
 
 async function sendFAQDocument(to) {
     const isChinese = getLanguage(to) === "zh";
-    const filename = isChinese ? "常见问题.pdf" : "FAQ.pdf";
-    const pdf = await readFile(path.join(__dirname, "FAQ", filename));
-    const form = new FormData();
-    form.append("messaging_product", "whatsapp");
-    form.append("type", "application/pdf");
-    form.append("file", new Blob([pdf], { type: "application/pdf" }), filename);
-
-    const baseUrl = "https://waba-v2.360dialog.io";
-    const headers = {
-        "D360-API-KEY": process.env.WHATSAPP_API_KEY
-    };
-    const upload = await axios.post(`${baseUrl}/media`, form, { headers });
-    const mediaId = upload.data?.id;
-
-    if (!mediaId) {
-        throw new Error("FAQ PDF upload did not return a media ID");
-    }
-
-    // Let failures reach the webhook so an unsuccessful delivery can be retried.
     await postWhatsApp("https://waba-v2.360dialog.io/messages", {
-        messaging_product: "whatsapp",
-        to,
-        type: "document",
+        messaging_product: "whatsapp", to, type: "document",
         document: {
-            id: mediaId,
-            filename
+            link: isChinese ? images.faqChinese : images.faqEnglish,
+            filename: isChinese ? "FAQChinese.pdf" : "FAQ.pdf"
         }
-    }, { headers });
+    }, { headers: { "D360-API-KEY": process.env.WHATSAPP_API_KEY } });
 
     await sendMessage(
         to,
@@ -1501,6 +1487,22 @@ async function handleFAQ(from) {
 }
 
 
+async function handleDirections(from) {
+    await postWhatsApp("https://waba-v2.360dialog.io/messages", {
+        messaging_product: "whatsapp", to: from, type: "document",
+        document: { link: images.directionsPDF, filename: "Directions.pdf",
+            caption: getLanguage(from) === "zh" ? "请查看附件中的交通指引。" : "Please see the attached directions to our tea space." }
+    }, { headers: { "D360-API-KEY": process.env.WHATSAPP_API_KEY } });
+}
+async function sendIntroductionVideo(to) {
+    await postWhatsApp("https://waba-v2.360dialog.io/messages", {
+        messaging_product: "whatsapp", to, type: "video",
+        video: { link: images.introductionVideo, caption: getLanguage(to) === "zh"
+            ? "您可以观看附上的视频，全面了解茶道。"
+            : "You can watch the attached video for a thorough introduction to Tea Ceremony" }
+    }, { headers: { "D360-API-KEY": process.env.WHATSAPP_API_KEY } });
+}
+
 async function handleThingsToNote(from) {
     const isChinese = getLanguage(from) === "zh";
 
@@ -1517,6 +1519,7 @@ Arrive about 5-10 mins before the session to check in, use the restroom and sett
 No phones during the session, guests will be asked to place their phones in a basket before entering the tea area, this is to preserve the calm energy that the ceremony creates.`;
 
     await sendMessage(from, message);
+    await sendIntroductionVideo(from);
 
     await sleep(1500);
 

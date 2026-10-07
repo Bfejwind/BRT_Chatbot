@@ -5,3 +5,4 @@ google-service-account.json
 !.env.example
 google-service-account.json
 /staff-packages/
+/.media-work/

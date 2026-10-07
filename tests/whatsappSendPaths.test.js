@@ -80,72 +80,51 @@ test("booking handlers propagate delivery failures without sending a misleading 
 });
 
 test("every active server message request uses the shared sender", () => {
-    assert.equal((source.match(/https:\/\/waba-v2\.360dialog\.io\/messages/g) || []).length, 17);
-    assert.equal((source.match(/postWhatsApp\(\s*"https:\/\/waba-v2\.360dialog\.io\/messages"/g) || []).length, 17);
+    assert.equal((source.match(/https:\/\/waba-v2\.360dialog\.io\/messages/g) || []).length, 19);
+    assert.equal((source.match(/postWhatsApp\(\s*"https:\/\/waba-v2\.360dialog\.io\/messages"/g) || []).length, 19);
     assert.ok(!/axios\.post\([^\n]*messages/.test(source));
 });
 
-test("FAQ uploads the bundled PDF through 360dialog and sends its media ID", async () => {
-    const uploads = [], sends = [];
-    const run = handler("sendFAQDocument", {
-        __dirname: "project", path: require("node:path"), FormData, Blob,
-        process: { env: { WHATSAPP_API_KEY: "test-key" } },
-        readFile: async file => {
-            assert.equal(file, require("node:path").join("project", "FAQ", "FAQ.pdf"));
-            return Buffer.from("test PDF");
-        },
-        axios: { post: async (...args) => {
-            uploads.push(args);
-            return { data: { id: "pdf-media" } };
-        } },
-        postWhatsApp: async (...args) => sends.push(args),
-        getLanguage: () => "en",
-        sendMessage: async (to, text) => {
-            assert.equal(sends.length, 1);
-            assert.equal(to, "customer");
-            assert.ok(text.startsWith("Frequently asked questions are answered in this file above"));
-        }
-    });
-    await run("customer");
-    assert.equal(uploads[0][0], "https://waba-v2.360dialog.io/media");
-    assert.equal(uploads[0][2].headers["D360-API-KEY"], "test-key");
-    assert.equal(sends[0][1].document.id, "pdf-media");
-    assert.equal(sends[0][1].document.filename, "FAQ.pdf");
-    assert.equal(sends[0][1].to, "customer");
+test("FAQs send Supabase links and matching filenames in both languages", async () => {
+    for (const language of ['en','zh']) {
+        const sends=[];
+        const run=handler('sendFAQDocument',{
+            images:{faqEnglish:'https://example.test/FAQ.pdf',faqChinese:'https://example.test/FAQChinese.pdf'},
+            getLanguage:()=>language, process:{env:{}},
+            postWhatsApp:async (...args)=>sends.push(args),
+            sendMessage:async(to,text)=>assert.ok(text.startsWith(language==='zh'?'常见问题':'Frequently asked questions'))
+        });
+        await run('customer');
+        const doc=sends[0][1].document;
+        assert.equal(doc.filename,language==='zh'?'FAQChinese.pdf':'FAQ.pdf');
+        assert.equal(doc.link,'https://example.test/'+doc.filename);
+        assert.equal(doc.id,undefined);
+    }
 });
-
-test("Chinese FAQ reads, uploads and sends 常见问题.pdf with Chinese instructions", async () => {
-    const run = handler("sendFAQDocument", {
-        __dirname: "project", path: require("node:path"), FormData, Blob,
-        process: { env: {} }, getLanguage: () => "zh",
-        readFile: async file => {
-            assert.equal(file, require("node:path").join("project", "FAQ", "常见问题.pdf"));
-            return Buffer.from("Chinese PDF");
-        },
-        axios: { post: async (url, form) => {
-            assert.equal(form.get("file").name, "常见问题.pdf");
-            return { data: { id: "chinese-pdf" } };
-        } },
-        postWhatsApp: async (url, payload) => {
-            assert.equal(payload.document.filename, "常见问题.pdf");
-            assert.equal(payload.document.id, "chinese-pdf");
-        },
-        sendMessage: async (to, text) => {
-            assert.equal(to, "customer");
-            assert.ok(text.startsWith("常见问题"));
-        }
-    });
-    await run("customer");
+test("Directions sends the configured PDF to the customer",async()=>{
+    const run=handler('handleDirections',{
+        images:{directionsPDF:'https://example.test/directions.pdf'},getLanguage:()=> 'en',process:{env:{}},
+        postWhatsApp:async(url,payload)=>{assert.equal(payload.to,'customer');assert.equal(payload.document.link,'https://example.test/directions.pdf');}
+    });await run('customer');
 });
-
-test("FAQ upload without a media ID fails before sending a document", async () => {
-    const run = handler("sendFAQDocument", {
-        __dirname: "project", path: require("node:path"), FormData, Blob,
-        process: { env: {} }, getLanguage: () => "en", readFile: async () => Buffer.from("test PDF"),
-        axios: { post: async () => ({ data: {} }) },
-        postWhatsApp: async () => assert.fail("must not send without a media ID")
-    });
-    await assert.rejects(run("customer"), /did not return a media ID/);
+test("Things to Note sends notes, introduction video, then the menu",async()=>{
+    const order=[];
+    const run=handler('handleThingsToNote',{
+        getLanguage:()=> 'en',sendMessage:async()=>order.push('notes'),
+        sendIntroductionVideo:async()=>order.push('video'),sleep:async()=>{},sendMainMenu:async()=>order.push('menu')
+    });await run('customer');assert.deepEqual(order,['notes','video','menu']);
+});
+test("introduction video includes bilingual captions and propagates delivery failure",async()=>{
+    for(const language of ['en','zh']) {
+        const run=handler('sendIntroductionVideo',{
+            images:{introductionVideo:'https://example.test/intro.mp4'},getLanguage:()=>language,process:{env:{}},
+            postWhatsApp:async(url,payload)=>{
+                assert.equal(payload.video.link,'https://example.test/intro.mp4');
+                assert.equal(payload.video.caption,language==='zh'?'您可以观看附上的视频，全面了解茶道。':'You can watch the attached video for a thorough introduction to Tea Ceremony');
+                throw new Error('send failed');
+            }
+        });await assert.rejects(run('customer'),/send failed/);
+    }
 });
 
 test("reminder tests use the approved customer's booking and template", async () => {
