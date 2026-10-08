@@ -19,7 +19,7 @@ test("confirmed bookings send staff the date, exact hours, package and party siz
         BOOKING_CONFIG: require("../bookingSchedule"),
         sendMessage: async (...args) => sends.push(args)
     });
-    for (const route of ["weekday", "weekend", "exclusive", "premium", "first_public"]) {
+    for (const route of ["weekday", "weekend", "exclusive", "premium", "unlimited", "first_public"]) {
         await notify("6591234567", { id: "booking", booking_date: "2026-10-08", booking_time: "16:00", party_size: 3 }, route);
         const [recipient, body] = sends.at(-1);
         assert.equal(recipient, "6580583517");

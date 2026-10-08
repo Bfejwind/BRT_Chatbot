@@ -23,7 +23,7 @@ function isRouteDateAllowed(date, route) {
         .toLocaleDateString("en-US", { timeZone: "Asia/Singapore", weekday: "short" });
     if (route === "first_public" || route === "weekday") return ["Mon", "Tue", "Wed", "Thu"].includes(day);
     if (route === "weekend") return ["Fri", "Sat", "Sun"].includes(day);
-    return route === "exclusive" || route === "premium" || route === "no_package";
+    return route === "exclusive" || route === "premium" || route === "unlimited" || route === "no_package";
 }
 module.exports = Object.freeze({
     isRouteDateAllowed,

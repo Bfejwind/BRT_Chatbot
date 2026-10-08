@@ -32,6 +32,14 @@ test("missing packages return null and database errors remain distinguishable", 
     await assert.rejects(fixture(null, error).getActivePackage("customer"), e => e === error);
 });
 
+test("unlimited packages grant their own route without a credit limit", async () => {
+    const f = fixture([{ package_type: 'unlimited', total_uses: null, used_uses: 0,
+        expires_on: null, allowed_routes: ['weekday','weekend','exclusive','premium'] }]);
+    assert.deepEqual(Array.from((await f.getActivePackage('customer')).allowed_routes),
+        ['unlimited']);
+    assert.equal(await fixture([{ total_uses: null, used_uses: 0, allowed_routes: ['weekday'] }]).getActivePackage('customer'), null);
+});
+
 test("empty packages do not grant booking access", async () => {
     const f = fixture([
         { allowed_routes: ["premium"], total_uses: 30, used_uses: 30, expires_on: null },

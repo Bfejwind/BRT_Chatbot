@@ -91,11 +91,12 @@ function createBookingJourney({ getDraft, startBooking, checkPackage, sendButton
                         ["WEEKDAY", "Weekday (Mon–Thu)", "平日（周一至周四）"],
                         ["WEEKEND", "Weekend (Fri–Sun)", "周末（周五至周日）"],
                         ["EXCLUSIVE", "Exclusive", "专享"],
-                        ["PREMIUM", "Premium", "高级"]
+                        ["PREMIUM", "Premium", "高级"],
+                        ["UNLIMITED", "Unlimited (Mon–Sun)", "无限次（周一至周日）"]
                     ].filter(([id]) => draft.package_routes.includes(id.toLowerCase())));
             }
         }
-        if (["WEEKDAY", "WEEKEND", "EXCLUSIVE", "PREMIUM"].includes(choice) &&
+        if (["WEEKDAY", "WEEKEND", "EXCLUSIVE", "PREMIUM", "UNLIMITED"].includes(choice) &&
             draft.journey_step === "category" && draft.package_verified &&
             draft.package_routes.includes(choice.toLowerCase())) {
             draft.booking_route = choice.toLowerCase(); draft.journey_step = "dates";

@@ -637,10 +637,10 @@ async function sendAvailableDates(to, page = 0) {
         return;
     }
     let dates = await getSelectableBookingDates(routeDraft.booking_route);
-    if (["weekday","weekend","exclusive","premium"].includes(routeDraft.booking_route)) {
+    if (["weekday","weekend","exclusive","premium","unlimited"].includes(routeDraft.booking_route)) {
         const membership = await getActivePackage(to);
         dates = dates.filter(date => membership?.packages.some(pkg =>
-            pkg.allowed_routes.includes(routeDraft.booking_route) && (!pkg.expires_on || date <= pkg.expires_on)));
+            (routeDraft.booking_route === "unlimited" ? pkg.package_type === "unlimited" : pkg.allowed_routes.includes(routeDraft.booking_route)) && (!pkg.expires_on || date <= pkg.expires_on)));
     }
     if (!dates.length) {
         await sendMessage(to, getLanguage(to) === "zh"
@@ -1153,7 +1153,7 @@ async function handleBookingConfirm(from) {
 
 async function sendConfirmedBookingToStaff(customerPhone, booking, route) {
     const packageTypes = {
-        weekday: "Weekday", weekend: "Weekend", exclusive: "Exclusive", premium: "Premium",
+        weekday: "Weekday", weekend: "Weekend", exclusive: "Exclusive", premium: "Premium", unlimited: "Unlimited",
         first_public: "None — $68 promotional public session", no_package: "None"
     };
     await sendMessage(process.env.STAFF_PHONE_NUMBER,

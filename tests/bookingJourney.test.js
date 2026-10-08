@@ -64,6 +64,32 @@ test("exclusive and premium remain distinct and only owned categories appear", a
         assert.deepEqual(f.menus.at(-1).map(row => row.id), routes.map(route => "JOURNEY_" + route.toUpperCase()));
     }
 });
+
+test("Unlimited is selectable only by holders, every day at 4–5:30 PM", async () => {
+    for (const chinese of [false, true]) {
+        const f = fixture({ allowed_routes: ['unlimited'] }, chinese);
+        await f.journey.begin('customer');
+        await f.journey.select('customer', 'RETURNING');
+        await f.journey.select('customer', 'HAS_PACKAGE');
+        await f.journey.select('customer', 'PUBLIC');
+        assert.deepEqual(f.menus.at(-1).map(row => row.id), ['JOURNEY_UNLIMITED']);
+        await f.journey.select('customer', 'UNLIMITED');
+        assert.deepEqual(f.dates, ['unlimited']);
+    }
+    const other = fixture({ allowed_routes: ['premium'] });
+    await other.journey.begin('customer');
+    await other.journey.select('customer', 'RETURNING');
+    await other.journey.select('customer', 'HAS_PACKAGE');
+    await other.journey.select('customer', 'PUBLIC');
+    assert.ok(!other.menus.at(-1).some(row => row.id === 'JOURNEY_UNLIMITED'));
+    await other.journey.select('customer', 'UNLIMITED');
+    assert.deepEqual(other.dates, []);
+    for (let day = 5; day <= 11; day++) {
+        assert.equal(schedule.isRouteDateAllowed(`2026-10-${String(day).padStart(2,'0')}`, 'unlimited'), true);
+    }
+    assert.deepEqual(schedule.startTimes, ['16:00']);
+    assert.equal(schedule.durationMinutes, 90);
+});
 test("first-time public visitors use Monday–Thursday, 4–5:30 PM", async () => {
     const f = fixture(); await f.journey.begin("customer");
     await f.journey.select("customer", "FIRST");

@@ -30,7 +30,7 @@ async function prepare(f, route) {
     await f.savePartySize("customer", 3);
 }
 test("all confirmations use a durable atomic reservation receipt", async () => {
-    for (const route of ["weekday", "exclusive", "premium", "first_public"]) {
+    for (const route of ["weekday", "exclusive", "premium", "unlimited", "first_public"]) {
         const f = fixture(route); await prepare(f, route); await f.submitBooking("customer");
         const [name, args] = f.calls[0];
         assert.equal(name, "reserve_booking_with_completion");

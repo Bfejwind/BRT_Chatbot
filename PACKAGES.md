@@ -2,6 +2,15 @@
 
 ## Staff website and package credits
 
+Unlimited packages are assigned through the staff website. They have no expiry
+or credit limit. Verified holders can select Unlimited in the chatbot to book
+Monday–Sunday, 16:00–17:30 Singapore time. Run migrations
+`005_unlimited_packages.sql` and `006_unlimited_booking_route.sql` after
+migration 004 and deploy the updated bot before using these packages.
+An Unlimited package stores `total_uses = null` and `used_uses = 0`; bookings keep
+redemption receipts without deducting credits. Staff can remove it, but its
+unlimited balance cannot be edited. Existing booking windows and capacity apply.
+
 Use [Tea Space Package Desk](https://tea-space-package-desk.officiallyrichard.chatgpt.site)
 to search a WhatsApp number, add a package,
 view remaining uses, or remove a package from future bookings. Website source
