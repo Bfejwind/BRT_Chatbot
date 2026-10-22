@@ -1,8 +1,59 @@
 # Booking reminders
 
+## Full reminders and staff private bookings (October 2026)
+
+The default reminder format is now `full_v2`: full English reminder, full Chinese
+translation, then a document template containing the address and Directions.pdf.
+Each timeline follows registration at the booked start, introduction 15 minutes
+later, and the session 30 minutes later. Morning/afternoon/evening greetings follow
+the registration time. Singapore time applies throughout.
+
+Run `migrations/007_staff_private_bookings.sql` after 006, then deploy/restart the
+bot with all new files (`privateBookings.js`, `reminderTemplates.js`, and updated
+`calendarService.js`, `bookingReminders.js`, `server.js`). No new secrets are needed.
+`BOOKING_REMINDERS_ENABLED=true` is still required. Set `BOOKING_REMINDER_FORMAT=legacy`
+only to deliberately retain the previous single-template behavior.
+
+The three definitions in `templates/tea_session_*_v2.json` must be approved.
+`node scripts/reminder-templates.js --submit` submits missing definitions through
+360dialog; without the flag it only checks their status. This script sends no
+customer messages. The scheduler checks approval before claiming any jobs and
+waits if approval is pending. Once all three are approved, it proceeds automatically.
+Accepted parts are checkpointed in `delivery_parts`, so retrying a rejected later
+part does not resend an earlier accepted part. Uncertain outcomes require review.
+The document is a template so it works outside the 24-hour customer service window.
+
+The existing staff Package Desk now has a Private bookings form. It saves a
+separate approved private booking with consent, date/time and 1–10 guests. Staff
+may use an eligible Exclusive/Premium package (one use per booking), use Unlimited
+without decrementing its balance, or choose no package deduction. Weekday and
+Weekend packages remain public-session packages. Database transactions lock the
+selected package and make repeated submissions/cancellations idempotent.
+
+The bot synchronizes new private sessions to Google Calendar every minute using
+deterministic event IDs, checking calendar conflicts before insertion. Failed
+calendar synchronization stays pending and is visible on the staff site; reminders
+are blocked until synchronization succeeds. Cancel through the staff site to
+restore a deducted use, suppress reminders and queue calendar deletion. To change
+a booking, cancel and re-enter it. Direct Google Calendar additions/edits are not
+imported; existing manually entered events must be reconciled before using the form.
+Overlapping public/private bookings already present in Supabase are rejected.
+Public chatbot bookings stay at 4 PM. Private bookings use their chosen time and
+the same previous-day reminder window; same-day bookings get no “tomorrow” message.
+The form does not send an immediate WhatsApp confirmation.
+
+The website deployment does not deploy the separate Node chatbot. Its server must
+run the updated code for private calendar synchronization and reminder delivery.
+
+## Previous single-template setup
+
 After confirmation, customers can tap **Test reminder** to receive the same
 approved reminder template immediately for their own approved booking. This
-does not change the booking or consume the scheduled reminder. The button's
+does not change the booking or consume the scheduled reminder. The
+click must reach the bot within 15 minutes of its WhatsApp timestamp. Older
+clicks, or clicks with missing/invalid timestamps, are acknowledged silently
+to prevent delayed webhook retries from generating unexpected replies.
+The button's
 message explains that the template's "tomorrow" wording is only a test sample.
 The test requires a valid 360dialog key and an approved configured template,
 even when the automated scheduler is disabled.

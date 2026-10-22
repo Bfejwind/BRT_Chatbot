@@ -338,7 +338,40 @@ async function updateSessionEventOccupancy({
     return data;
 }
 
+async function synchronizePrivateBooking(booking) {
+    const eventId=`private${booking.id.replace(/-/g,'')}`;
+    if(booking.status==='cancelled') {
+        try { await calendar.events.delete({calendarId:process.env.GOOGLE_CALENDAR_ID,eventId}); }
+        catch(error){if(![404,410].includes(Number(error.response?.status||error.code)))throw error;}
+        return eventId;
+    }
+    let existing;
+    try { existing=(await calendar.events.get({calendarId:process.env.GOOGLE_CALENDAR_ID,eventId})).data; }
+    catch(error){if(Number(error.response?.status||error.code)!==404)throw error;}
+    const start=getSessionStart(booking.booking_date,booking.booking_time);
+    if(existing) {
+        if(existing.status==='cancelled' || existing.extendedProperties?.private?.privateBookingId!==booking.id
+            || new Date(existing.start?.dateTime).getTime()!==start.getTime())throw new Error('Private calendar event changed; review booking');
+        return eventId;
+    }
+    if(await hasExternalCalendarConflict({bookingDate:booking.booking_date,bookingTime:booking.booking_time}))
+        throw new Error('Private session overlaps an existing calendar event');
+    try {
+        await calendar.events.insert({calendarId:process.env.GOOGLE_CALENDAR_ID,resource:{
+            id:eventId,summary:`Private Tea Session — ${booking.party_size} guests`,
+            description:`Staff private booking: ${booking.id}\nWhatsApp: +${booking.customer_phone}\nGuests: ${booking.party_size}\nManage or cancel through the staff package desk.`,
+            start:{dateTime:start.toISOString(),timeZone:'Asia/Singapore'},
+            end:{dateTime:new Date(start.getTime()+90*60_000).toISOString(),timeZone:'Asia/Singapore'},
+            extendedProperties:{private:{privateBookingId:booking.id}}
+        }});
+    }catch(error){
+        if(Number(error.response?.status||error.code)!==409)throw error;
+        return synchronizePrivateBooking(booking);
+    }
+    return eventId;
+}
 module.exports = {
+    synchronizePrivateBooking,
     getUpcomingEvents,
     getEventsForDay,
     getAvailableSlots,

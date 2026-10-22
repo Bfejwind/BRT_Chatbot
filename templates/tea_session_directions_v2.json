@@ -1,0 +1,20 @@
+{
+  "name": "tea_session_directions_v2",
+  "language": "en",
+  "category": "UTILITY",
+  "components": [
+    {
+      "type": "HEADER",
+      "format": "DOCUMENT",
+      "example": {
+        "header_handle": [
+          "https://ixjmzksmazysazlyoxne.supabase.co/storage/v1/object/public/chatbot-images/Getting%20to%20the%20RROYCE%20Building.pdf.pdf"
+        ]
+      }
+    },
+    {
+      "type": "BODY",
+      "text": "Directions for your booked tea session / 茶会交通指南\n\nRRoyce Building, 65 Mohamed Sultan Rd, Level 3, Singapore 239003"
+    }
+  ]
+}

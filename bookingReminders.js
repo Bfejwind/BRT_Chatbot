@@ -60,10 +60,21 @@ function createReminderWorker({ store, send, config, now = () => new Date(), log
                     continue;
                 }
                 let messageId;
+                const parts = { ...(job.delivery_parts || {}) };
                 try {
-                    const response = await send(reminderPayload(booking, config));
-                    messageId = response?.messages?.[0]?.id;
-                    if (!messageId) throw new Error("WhatsApp returned no message ID");
+                    const payloads = config.format === 'full_v2'
+                        ? require('./reminderTemplates').reminderSequence(booking) : [reminderPayload(booking, config)];
+                    for (const [index,payload] of payloads.entries()) {
+                        if(parts[index]) { messageId=parts[index]; continue; }
+                        const response = await send(payload);
+                        messageId = response?.messages?.[0]?.id;
+                        if (!messageId) throw new Error("WhatsApp returned no message ID");
+                        if(config.format === 'full_v2') {
+                            parts[index]=messageId;
+                            // A checkpoint failure is ambiguous: never resend this part.
+                            await store.saveParts(job,parts);
+                        }
+                    }
                 } catch (error) {
                     // Only an explicit API rejection is safe to retry. A timeout or
                     // connection loss may happen AFTER WhatsApp accepted the message.
@@ -81,7 +92,12 @@ function createReminderWorker({ store, send, config, now = () => new Date(), log
                 await store.finish(job, "accepted", messageId);
             }
         } catch (error) {
-            logger.error("Booking reminder worker failed:", error.code || error.message);
+            logger.error("Booking reminder worker failed:", {
+                code: error.code,
+                message: error.message,
+                details: error.details,
+                hint: error.hint
+            });
         } finally {
             running = false;
         }
@@ -94,24 +110,41 @@ function startBookingReminders() {
         return;
     }
     const config = {
+        format: process.env.BOOKING_REMINDER_FORMAT || 'full_v2',
         template: process.env.WHATSAPP_REMINDER_TEMPLATE,
         language: process.env.WHATSAPP_REMINDER_LANGUAGE || "en_US"
     };
-    if (!config.template || !process.env.WHATSAPP_API_KEY) {
+    if ((!config.template && config.format !== 'full_v2') || !process.env.WHATSAPP_API_KEY) {
         throw new Error("Booking reminders require a template and WHATSAPP_API_KEY");
     }
     const db = require("./supabaseClient");
     const { postWhatsApp } = require("./whatsappSender");
     const { getBookingById } = require("./bookingDatabase");
-    const store = {
+    function makeStore(table,claimRpc,getBooking) { return {
         async claim() {
-            const { data, error } = await db.rpc("claim_booking_reminder");
+            const { data, error } = await db.rpc(claimRpc);
             if (error) throw error;
-            return data?.[0] || null;
+            const job=data?.[0];
+            if(!job)return null;
+            if(config.format === 'full_v2') {
+                const result=await db.from(table).select('delivery_parts').eq('booking_id',job.booking_id)
+                    .eq('session_id',job.session_id).eq('booking_date',job.booking_date).eq('booking_time',job.booking_time).single();
+                if(result.error)throw result.error;
+                job.delivery_parts=result.data.delivery_parts;
+            }
+            return job;
         },
-        getBooking: getBookingById,
+        getBooking,
+        async saveParts(job,parts) {
+            const result=await db.from(table).update({delivery_parts:parts,updated_at:new Date().toISOString()})
+                .eq('booking_id',job.booking_id).eq('session_id',job.session_id)
+                .eq('booking_date',job.booking_date).eq('booking_time',job.booking_time)
+                .eq('claim_token',job.claim_token).eq('status','sending').select('booking_id');
+            if(result.error)throw result.error;
+            if(result.data?.length!==1)throw new Error('Reminder claim was lost');
+        },
         async finish(job, status, messageId = null, errorText = null) {
-            const { data, error } = await db.from("booking_reminders").update({
+            const { data, error } = await db.from(table).update({
                 status,
                 whatsapp_message_id: messageId,
                 last_error: errorText,
@@ -128,8 +161,8 @@ function startBookingReminders() {
             if (error) throw error;
             if (data?.length !== 1) throw new Error("Reminder claim was lost");
         }
-    };
-    const run = createReminderWorker({ store, config, send: async payload => {
+    }; }
+    const send = async payload => {
         const response = await postWhatsApp(
             "https://waba-v2.360dialog.io/messages",
             payload,
@@ -137,7 +170,35 @@ function startBookingReminders() {
                 "Content-Type": "application/json" }, timeout: 30000 }
         );
         return response.data;
-    } });
+    };
+    const publicRun=createReminderWorker({store:makeStore('booking_reminders','claim_booking_reminder',getBookingById),config,send});
+    const privateRun=createReminderWorker({store:makeStore('staff_private_reminders','claim_staff_private_reminder',async id=>{
+        const {data,error}=await db.from('staff_private_bookings').select('*').eq('id',id).maybeSingle();
+        if(error)throw error;
+        return data&&data.reminder_consent&&data.calendar_sync_status==='synced'
+            ? {...data,session_id:data.id}:null;
+    }),config,send});
+    let readyUntil=0;
+    const run=async()=>{
+        if(config.format==='full_v2' && Date.now()>=readyUntil) {
+            try {
+                // Do not claim jobs or exhaust their retries while approval is pending.
+                const response=await require('axios').get('https://waba-v2.360dialog.io/v1/configs/templates',{
+                    headers:{'D360-API-KEY':process.env.WHATSAPP_API_KEY},timeout:20000
+                });
+                const rows=response.data.waba_templates||[];
+                const ready=require('./reminderTemplates').definitions.every(d=>rows.some(t=>
+                    t.name===d.name&&t.language===d.language&&String(t.status).toLowerCase()==='approved'));
+                if(!ready){console.log('Full reminders waiting for template approval; no jobs claimed.');return;}
+                for(const table of ['booking_reminders','staff_private_reminders']) {
+                    const result=await db.from(table).select('delivery_parts').limit(0);
+                    if(result.error)throw result.error;
+                }
+                readyUntil=Date.now()+5*60_000;
+            }catch(error){console.error('Reminder readiness check failed',error.code||'CONFIGURATION_ERROR');return;}
+        }
+        await publicRun();await privateRun();
+    };
     void run();
     const timer = setInterval(() => { void run(); }, 60 * 1000);
     timer.unref();

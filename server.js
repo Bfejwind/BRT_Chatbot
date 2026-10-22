@@ -6,6 +6,7 @@ const { createDateFlowMessage, readDateFlowReply } = require("./bookingDateFlow"
 const BOOKING_CONFIG = require("./bookingSchedule");
 const { postWhatsApp } = require("./whatsappSender");
 const { startBookingReminders, reminderPayload } = require("./bookingReminders");
+const { reminderTestSelection, shouldSkipReminderTest } = require("./reminderTestGuard");
 const {
     claimMessage,
     completeMessage,
@@ -1187,11 +1188,19 @@ async function handleReminderTest(from, bookingId) {
         await sendMessage(from, isChinese ? "找不到您的已确认预约。" : "No confirmed booking was found for you.");
         return;
     }
-    if (!process.env.WHATSAPP_REMINDER_TEMPLATE) {
+    if (!process.env.WHATSAPP_REMINDER_TEMPLATE && process.env.BOOKING_REMINDER_FORMAT === 'legacy') {
         await sendMessage(from, isChinese ? "预约提醒模板尚未配置，请联系工作人员。" : "The reminder template is not configured yet. Please contact staff.");
         return;
     }
     // A customer-requested test does not claim or finish a scheduled reminder job.
+    if(process.env.BOOKING_REMINDER_FORMAT !== 'legacy') {
+        for(const payload of require('./reminderTemplates').reminderSequence(booking)) {
+            await postWhatsApp('https://waba-v2.360dialog.io/messages',payload,{
+                headers:{'D360-API-KEY':process.env.WHATSAPP_API_KEY},timeout:30000
+            });
+        }
+        return;
+    }
     await postWhatsApp("https://waba-v2.360dialog.io/messages", reminderPayload(booking, {
         template: process.env.WHATSAPP_REMINDER_TEMPLATE,
         language: process.env.WHATSAPP_REMINDER_LANGUAGE || "en_US"
@@ -2212,6 +2221,20 @@ app.post(
                                 from
                             );
 
+                            console.log("Incoming WhatsApp metadata:", {
+                                id: messageId,
+                                timestamp: message.timestamp,
+                                receivedAt: new Date().toISOString(),
+                                type: message.type,
+                                reminderTestSelection: reminderTestSelection(message)
+                            });
+
+                            if (shouldSkipReminderTest(message)) {
+                                await completeMessage(messageId, claimToken);
+                                console.log("Skipped stale or invalid reminder test:", messageId);
+                                continue;
+                            }
+
                             // Restore the booking language along with its draft
                             // after a restart or when another instance handles it.
                             if (!userLanguages[from]) {
@@ -2252,6 +2275,9 @@ app.post(
                                 "Message processing failed:",
                                 messageId,
                                 JSON.stringify({
+                                    code: processingError.code,
+                                    details: processingError.details,
+                                    hint: processingError.hint,
                                     status: processingError.response?.status,
                                     error: processingError.response?.data?.error || processingError.message
                                 })
@@ -2289,6 +2315,11 @@ app.post(
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     startBookingReminders();
+    const privateCalendar = require('./privateBookings').createPrivateCalendarWorker({
+        db:require('./supabaseClient'), synchronize:require('./calendarService').synchronizePrivateBooking
+    });
+    void privateCalendar();
+    setInterval(()=>{void privateCalendar();},60_000).unref();
     const recover = () => completeBookings().catch(error => console.error('Booking recovery failed:',error.message));
     void recover();
     setInterval(recover,60_000).unref();

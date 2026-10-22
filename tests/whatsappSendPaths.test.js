@@ -80,8 +80,9 @@ test("booking handlers propagate delivery failures without sending a misleading 
 });
 
 test("every active server message request uses the shared sender", () => {
-    assert.equal((source.match(/https:\/\/waba-v2\.360dialog\.io\/messages/g) || []).length, 19);
-    assert.equal((source.match(/postWhatsApp\(\s*"https:\/\/waba-v2\.360dialog\.io\/messages"/g) || []).length, 19);
+    const urls=(source.match(/https:\/\/waba-v2\.360dialog\.io\/messages/g)||[]).length;
+    assert.ok(urls>0);
+    assert.equal((source.match(/postWhatsApp\(\s*["']https:\/\/waba-v2\.360dialog\.io\/messages["']/g) || []).length, urls);
     assert.ok(!/axios\.post\([^\n]*messages/.test(source));
 });
 
@@ -127,12 +128,12 @@ test("introduction video includes bilingual captions and propagates delivery fai
     }
 });
 
-test("reminder tests use the approved customer's booking and template", async () => {
+test("legacy reminder tests use the approved customer's booking and template", async () => {
     const booking = { customer_phone: "customer", status: "approved" };
     const sends = [];
     const run = handler("handleReminderTest", {
         getBookingById: async () => booking, getLanguage: () => "en",
-        process: { env: { WHATSAPP_REMINDER_TEMPLATE: "tea_session_reminder" } },
+        process: { env: { WHATSAPP_REMINDER_TEMPLATE: "tea_session_reminder", BOOKING_REMINDER_FORMAT:'legacy' } },
         reminderPayload: (value, config) => {
             assert.equal(value, booking);
             assert.equal(config.template, "tea_session_reminder");
@@ -144,6 +145,18 @@ test("reminder tests use the approved customer's booking and template", async ()
     await run("customer", "booking-id");
     assert.equal(sends.length, 1);
     assert.equal(sends[0][1].to, "customer");
+});
+
+test('full reminder tests send English, Chinese and directions in order',async()=>{
+    const booking={customer_phone:'customer',status:'approved',booking_date:'2026-10-30',booking_time:'10:30:00'};
+    const sends=[];
+    const run=handler('handleReminderTest',{
+        getBookingById:async()=>booking,getLanguage:()=> 'en',process:{env:{}},
+        require:path=>require(path==='./reminderTemplates'?'../reminderTemplates':path),
+        postWhatsApp:async(_url,payload)=>sends.push(payload),sendMessage:async()=>assert.fail('Expected templates')
+    });
+    await run('customer','booking-id');assert.equal(sends.length,3);
+    assert.deepEqual(sends.map(p=>p.template.name),require('../reminderTemplates').definitions.map(d=>d.name));
 });
 
 test("another customer cannot trigger a reminder test for someone else's booking", async () => {
