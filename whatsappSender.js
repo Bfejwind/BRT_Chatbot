@@ -1,4 +1,4 @@
-// One queue for this 360dialog channel. All server sends must use this sender.
+// One queue for the active WhatsApp channel. All server sends use this sender.
 function createWhatsAppSender({ post, now = Date.now,
     sleep = ms => new Promise(resolve => setTimeout(resolve, ms)),
     channelIntervalMs = 1100, recipientIntervalMs = 6500,
@@ -31,7 +31,7 @@ function createWhatsAppSender({ post, now = Date.now,
                     ? seconds * 1000 : Date.parse(header) - now();
                 const delay = Math.max(30000 * (2 ** attempt), retryAfter || 0);
                 channelReady = now() + delay;
-                warn(`360dialog rate limit: retry ${attempt + 1}/${maxRetries} in ${delay}ms`);
+                warn(`WhatsApp rate limit: retry ${attempt + 1}/${maxRetries} in ${delay}ms`);
             } finally {
                 channelReady = Math.max(channelReady, now() + channelIntervalMs);
                 // Prune expired entries so phone numbers do not accumulate indefinitely.
@@ -52,12 +52,15 @@ function createWhatsAppSender({ post, now = Date.now,
 
 // Lazy singleton lets chatbot replies and reminders share the same channel queue.
 let defaultSender;
-function postWhatsApp(...args) {
+function postWhatsApp(url,payload,options) {
+    const {MESSAGE_URL,providerConfig,messageRequest}=require('./whatsappProvider');
+    if(url!==MESSAGE_URL)throw new Error('Unsupported WhatsApp message endpoint');
+    const request=messageRequest(providerConfig(),payload,options);
     if (!defaultSender) {
         const axios = require("axios");
         defaultSender = createWhatsAppSender({ post: (...request) => axios.post(...request) });
     }
-    return defaultSender(...args);
+    return defaultSender(...request);
 }
 
 module.exports = { createWhatsAppSender, postWhatsApp };
