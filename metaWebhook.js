@@ -74,7 +74,12 @@ function mountMetaTestWebhook(app,{env=process.env,send,logger=console,now=Date.
             }
             res.sendStatus(200);
         }catch(error){
-            logger.error('Meta test webhook send outcome requires review',{status:error.response?.status,code:error.code});
+            logger.error('Meta test webhook send outcome requires review',{
+                status:error.response?.status,code:error.code,
+                metaCode:error.response?.data?.error?.code,
+                metaSubcode:error.response?.data?.error?.error_subcode,
+                metaType:error.response?.data?.error?.type
+            });
             res.sendStatus(500);
         }
     });
