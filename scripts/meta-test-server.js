@@ -22,6 +22,17 @@ if(require.main===module){
         const host=process.env.META_TEST_HOST||'127.0.0.1';
         const port=Number(process.env.PORT||3100);
         createTestApp().listen(port,host,()=>console.log(`Meta test-only server listening on ${host}:${port}`));
+        const config=providerConfig(process.env,{test:true});
+        axios.get(`https://graph.facebook.com/${config.version}/${config.phoneNumberId}`,{
+            headers:{Authorization:`Bearer ${config.accessToken}`},params:{fields:'id'},timeout:15000
+        }).then(response=>console.log('Meta test token probe',{
+            httpStatus:response.status,expectedPhone:response.data.id===config.phoneNumberId,
+            tokenLength:config.accessToken.length
+        })).catch(error=>console.error('Meta test token probe failed',{
+            httpStatus:error.response?.status,metaCode:error.response?.data?.error?.code,
+            metaType:error.response?.data?.error?.type,contentType:error.response?.headers?.['content-type'],
+            tokenLength:config.accessToken.length
+        }));
     }catch(error){console.error(error.message);process.exitCode=1;}
 }
 module.exports={createTestApp};
