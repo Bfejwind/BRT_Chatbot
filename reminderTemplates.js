@@ -53,7 +53,10 @@ const definitions = [
         {type:'BODY',text:`Directions for your booked tea session / 茶会交通指南\n\n${ADDRESS}`}
     ] }
 ];
-function reminderSequence(booking) {
+function reminderSequence(booking,format='full_v2') {
+    if(format==='full_v5')return require('./reminderRevision5').sequence(booking);
+    if(format==='full_v4')return require('./reminderRevision4').sequence(booking);
+    if(format==='full_v3')return require('./reminderDraft').sequence(booking);
     const start = new Date(`${booking.booking_date}T${booking.booking_time}+08:00`);
     if (!Number.isFinite(start.getTime())) throw new Error('Invalid reminder session date/time');
     const intro = new Date(start.getTime()+15*60_000), session = new Date(start.getTime()+30*60_000);
@@ -71,4 +74,9 @@ function reminderSequence(booking) {
         }
     }));
 }
-module.exports={ADDRESS,DIRECTIONS_PDF,definitions,reminderSequence};
+function getDefinitions(format='full_v2'){
+    if(format==='full_v5')return require('./reminderRevision5').definitions;
+    if(format==='full_v4')return require('./reminderRevision4').definitions;
+    return format==='full_v3'?require('./reminderDraft').definitions:definitions;
+}
+module.exports={ADDRESS,DIRECTIONS_PDF,definitions,getDefinitions,reminderSequence};
