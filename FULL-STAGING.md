@@ -145,3 +145,35 @@ This read-only command validates isolation, database access, calendar access, te
 phone, subscription, reminder assets and Flow; it writes only a sanitized local
 report to meta-full-staging-readiness.json. Exit 2 means checks remain blocked.
 A successful health check alone does not certify messaging or booking readiness.
+
+## Hosted full-bot staging — 27 October 2026
+
+The refreshed test token validates. Published test Flow 1662263118698196 is now
+configured in ignored .env.staging. Test-WABA copies of English v4, Chinese v4 and
+directions v2 were submitted directly to Meta. Chinese is approved; English and
+directions are pending at the latest check. Production copies remain approved.
+
+Separate branch codex/meta-full-staging was pushed at d6850294e23e4b1114afc035697227b341717679.
+Free Render service brt-meta-full-staging (srv-dbg1heijnfac73f08340) deployed
+successfully in Singapore, with npm ci, node scripts/full-staging-server.js,
+/health and automatic deploys OFF. URL: https://brt-meta-full-staging.onrender.com.
+Only staging credentials and the sanitized baseline were uploaded after owner
+approval. The temporary environment import file was removed afterward.
+
+Meta confirms the existing TEST WABA's override now points to the full staging
+/webhook. Its override was read back and the app-wide production callback was
+verified unchanged. Production number and billing were not changed. Automatic
+reminders remain disabled until test templates are approved and the controlled
+rehearsal is ready. Owner was asked to send Hi to the test number for real inbound
+verification. Health alone is not a full booking acceptance result.
+
+Support case 1104791312160964 is confirmed received/active. The existing reply
+refers the request to WhatsApp's general contact page; it does not confirm a
+coexistence-compatible release/billing procedure. Escalation send was attempted,
+but the new message was not visible afterward, so delivery is unverified.
+
+Security follow-up: an environment form diagnostic accidentally included the
+Meta app secret, Google service-account private key and staging verify token in
+tool output. Values are not recorded here. Coordinate rotation and update every
+consumer before cutover; do not rotate shared production credentials casually or
+claim the environment is ready for cutover while that work remains outstanding.
