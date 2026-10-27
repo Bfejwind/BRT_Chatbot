@@ -1,8 +1,14 @@
-// Usage: node scripts/reminder-templates.js [--submit]
+// Usage: node scripts/reminder-templates.js [--submit] [--draft-zh|--draft-en]
 // Submits definitions for approval only; never sends a customer message.
 require('dotenv').config({quiet:true});
 const axios=require('axios');
-const {definitions}=require('../reminderTemplates');
+const {definitions:liveDefinitions}=require('../reminderTemplates');
+// Revised copies are submitted separately after explicit owner authorization.
+const draftLanguage=process.argv.includes('--draft-zh')?'zh_CN':process.argv.includes('--draft-en')?'en':null;
+const revision=process.argv.includes('--v4')?'v4':'v3';
+const draft=require(revision==='v4'?'../reminderRevision4':'../reminderDraft');
+const definitions=draftLanguage
+    ? draft.definitions.filter(d=>d.language===draftLanguage&&d.name.endsWith('_'+revision)):liveDefinitions;
 const base='https://waba-v2.360dialog.io';
 const headers={'D360-API-KEY':process.env.WHATSAPP_API_KEY};
 async function main(){

@@ -6,3 +6,5 @@ google-service-account.json
 google-service-account.json
 /staff-packages/
 /.media-work/
+
+/.staging-baseline.json

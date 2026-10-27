@@ -4,7 +4,14 @@ const express = require("express");
 const axios = require("axios");
 const { createDateFlowMessage, readDateFlowReply } = require("./bookingDateFlow");
 const BOOKING_CONFIG = require("./bookingSchedule");
-const { postWhatsApp } = require("./whatsappSender");
+const { postWhatsApp, createWhatsAppSender } = require("./whatsappSender");
+const { providerConfig, validateMeta, messageRequest } = require('./whatsappProvider');
+const { metaAuthentication, mountMetaTestWebhook } = require('./metaWebhook');
+const activeWhatsApp = providerConfig();
+if (activeWhatsApp.provider === 'meta') validateMeta(activeWhatsApp);
+if (activeWhatsApp.provider === 'meta' && !process.env.META_APP_SECRET) {
+    throw new Error('META_APP_SECRET is required for direct Meta webhooks');
+}
 const { startBookingReminders, reminderPayload } = require("./bookingReminders");
 const { reminderTestSelection, shouldSkipReminderTest } = require("./reminderTestGuard");
 const {
@@ -128,6 +135,11 @@ app.use(express.json({
     }
 }));
 
+const metaTestSender=createWhatsAppSender({post:(...request)=>axios.post(...request)});
+mountMetaTestWebhook(app,{
+    send:payload=>metaTestSender(...messageRequest(providerConfig(process.env,{test:true}),payload))
+});
+
 const PORT = process.env.PORT || 3000;
 
 // Public landing page. Meta's app review asks for a website that shows
@@ -186,128 +198,13 @@ app.get("/health", (req, res) => {
     res.status(200).json({ status: "ok" });
 });
 
-// Phase 5/6: Embedded Signup landing page.
-// This is the exact URL entered as the Valid OAuth Redirect URI
-// and covered by the Allowed Domain in Facebook Login for Business settings.
-app.get("/connect-whatsapp", (req, res) => {
-    res.send(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <title>Connect WhatsApp</title>
-        </head>
-        <body>
-            <h1>Connect your WhatsApp number</h1>
-            <button id="launch-signup">Connect WhatsApp</button>
-            <p id="status"></p>
-
-            <script>
-                window.fbAsyncInit = function () {
-                    FB.init({
-                        appId: "${process.env.FACEBOOK_APP_ID}",
-                        autoLogAppEvents: true,
-                        xfbml: true,
-                        version: "v21.0"
-                    });
-                };
-            </script>
-            <script async defer crossorigin="anonymous"
-                src="https://connect.facebook.net/en_US/sdk.js">
-            </script>
-
-            <script>
-                document.getElementById("launch-signup").onclick = function () {
-                    const statusEl = document.getElementById("status");
-                    statusEl.textContent = "Opening WhatsApp signup...";
-
-                    FB.login(function (response) {
-                        if (response.authResponse && response.authResponse.code) {
-                            statusEl.textContent = "Finishing setup...";
-
-                            fetch("/whatsapp-signup/exchange", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({
-                                    code: response.authResponse.code
-                                })
-                            })
-                                .then(res => res.json())
-                                .then(data => {
-                                    statusEl.textContent = data.success
-                                        ? "WhatsApp connected successfully."
-                                        : "Setup failed: " + (data.error || "unknown error");
-                                })
-                                .catch(err => {
-                                    statusEl.textContent = "Setup failed: " + err.message;
-                                });
-                        } else {
-                            statusEl.textContent = "Signup was cancelled or did not complete.";
-                        }
-                    }, {
-                        config_id: "${process.env.EMBEDDED_SIGNUP_CONFIG_ID}",
-                        response_type: "code",
-                        override_default_response_type: true,
-                        extras: {
-                            version: "v3",
-                            setup: {},
-                            featureType: "whatsapp_business_app_onboarding"
-                        }
-                    });
-                };
-            </script>
-        </body>
-        </html>
-    `);
+// Meta account setup is staff-managed until authenticated customer onboarding exists.
+// Do not exchange a public code and report a connection that was never persisted.
+app.get('/connect-whatsapp', (req,res)=>{
+    res.status(200).send('<!doctype html><html><head><meta charset="utf-8"><title>WhatsApp account connection</title></head><body><h1>WhatsApp account connection</h1><p>Account connections are currently managed by staff. Please contact your service administrator to connect a business account.</p></body></html>');
 });
-
-// Phase 7: Exchanges the Embedded Signup "code" for a token,
-// then completes onboarding for the returned WABA/phone number.
-// NOTE: this is scaffolding for Phase 7 — the actual onboarding API
-// calls (registering the number, subscribing the app to the WABA)
-// still need to be filled in once you reach that phase and have
-// a WABA ID / phone number ID coming back from Meta to test against.
-app.post("/whatsapp-signup/exchange", async (req, res) => {
-    const { code } = req.body;
-
-    if (!code) {
-        return res.status(400).json({ success: false, error: "Missing code" });
-    }
-
-    try {
-        const tokenResponse = await axios.get(
-            "https://graph.facebook.com/v21.0/oauth/access_token",
-            {
-                params: {
-                    client_id: process.env.FACEBOOK_APP_ID,
-                    client_secret: process.env.META_APP_SECRET,
-                    code
-                }
-            }
-        );
-
-        const accessToken = tokenResponse.data.access_token;
-
-        // TODO (Phase 7): use accessToken to call the debug_token
-        // endpoint to retrieve the granular_scopes, which contain
-        // the new WABA ID and phone number ID Meta just created,
-        // then call the register/onboarding endpoints for that number.
-
-        console.log("Embedded Signup token exchange succeeded.");
-
-        res.json({ success: true });
-
-    } catch (error) {
-        console.error(
-            "Embedded Signup token exchange failed:",
-            error.response?.data || error.message
-        );
-
-        res.status(500).json({
-            success: false,
-            error: "Token exchange failed"
-        });
-    }
+app.post('/whatsapp-signup/exchange', (req,res)=>{
+    res.status(501).json({success:false,error:'Self-service account connection is not enabled. Contact your service administrator.'});
 });
 
 // NOTE: Webhooks now arrive from 360dialog, not directly from Meta.
@@ -351,6 +248,8 @@ app.get("/webhook", (req, res) => {
 
     if (
         mode === "subscribe" &&
+        typeof process.env.VERIFY_TOKEN === 'string' && process.env.VERIFY_TOKEN.length > 0 &&
+        typeof challenge === 'string' &&
         token === process.env.VERIFY_TOKEN
     ) {
         console.log("Webhook verified");
@@ -1194,7 +1093,7 @@ async function handleReminderTest(from, bookingId) {
     }
     // A customer-requested test does not claim or finish a scheduled reminder job.
     if(process.env.BOOKING_REMINDER_FORMAT !== 'legacy') {
-        for(const payload of require('./reminderTemplates').reminderSequence(booking)) {
+        for(const payload of require('./reminderTemplates').reminderSequence(booking,process.env.BOOKING_REMINDER_FORMAT||'full_v2')) {
             await postWhatsApp('https://waba-v2.360dialog.io/messages',payload,{
                 headers:{'D360-API-KEY':process.env.WHATSAPP_API_KEY},timeout:30000
             });
@@ -2143,6 +2042,9 @@ async function handleInteractiveMessage(from, message) {
 }
 
 function requireValid360DialogSecret(req, res, next) {
+    if (activeWhatsApp.provider === 'meta') {
+        return metaAuthentication(activeWhatsApp,{secret:process.env.META_APP_SECRET})(req,res,next);
+    }
     if (!verify360DialogWebhookSecret(req)) {
         console.warn(
             "Rejected webhook: invalid or missing webhook secret"
@@ -2160,6 +2062,11 @@ app.post(
     requireValid360DialogSecret,
     async (req, res) => {
         try {
+            if (process.env.BOT_STAGING === 'true') {
+                const allowed = new Set(String(process.env.STAGING_RECIPIENTS || '').split(',').map(p=>p.trim()));
+                const incoming = (req.body.entry || []).flatMap(e=>(e.changes || []).flatMap(c=>c.value?.messages || []));
+                if (incoming.some(m=>!allowed.has(m.from))) return res.sendStatus(403);
+            }
             const entries = req.body.entry || [];
 
             for (const entry of entries) {

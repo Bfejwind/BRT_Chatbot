@@ -2,6 +2,14 @@
 
 ## Full reminders and staff private bookings (October 2026)
 
+October 26 revision: the owner-provided Chinese and revised English templates
+are `tea_session_reminder_full_zh_v3` and `tea_session_reminder_full_en_v3`.
+After Meta approves both, deploy the updated code with
+`BOOKING_REMINDER_FORMAT=full_v3`. The provider can stay `360dialog`; this wording
+change does not require moving the number. The address/document template remains
+`tea_session_directions_v2`. Until that explicit setting, the v2 wording is used.
+The v3 English spacing and wording are saved in `templates/drafts/reminder-preview.md`.
+
 The default reminder format is now `full_v2`: full English reminder, full Chinese
 translation, then a document template containing the address and Directions.pdf.
 Each timeline follows registration at the booked start, introduction 15 minutes
@@ -119,3 +127,12 @@ See [Meta's template sending reference](https://whatsapp.github.io/WhatsApp-Node
 
 To disable reminders, set `BOOKING_REMINDERS_ENABLED=false` and restart.
 To run the isolated tests: `node --test tests/bookingReminders.test.js`.
+
+## Owner revision v4 (2026-10-26)
+
+English now starts "Dear Guests,". Chinese preserves the owner-supplied blank
+lines between every reminder bullet and before the closing. New v4 English and
+Chinese templates were submitted for approval; directions v2/address/PDF stay
+unchanged. Preview: templates/drafts/reminder-preview-v4.md. After approval and
+an authorized deployment, use BOOKING_REMINDER_FORMAT=full_v4. Existing v3
+checkpointed jobs retain v3. No live provider or production format was changed.

@@ -29,3 +29,13 @@ test('uncertain checkpoint outcome never continues to the next message',async()=
     const run=createReminderWorker({store:{claim:async()=>claimed?null:(claimed=true,{booking_id:'b',session_id:'s',booking_date:booking.booking_date,booking_time:booking.booking_time}),getBooking:async()=>booking,saveParts:async()=>{throw new Error('Database unavailable');},finish:async(_,status)=>outcomes.push(status)},config:{format:'full_v2'},now:()=>new Date('2026-10-29T03:00:00Z'),logger:{error(){}},send:async()=>{sends++;return {messages:[{id:'accepted'}]};}});
     await run();assert.equal(sends,1);assert.deepEqual(outcomes,['unknown']);
 });
+test('multipart reminders retain v3 after a configuration change between retries',async()=>{
+    let currentParts={},claimed=false,attempt=0;const sends=[],outcomes=[];
+    const config={format:'full_v3'};
+    const store={claim:async()=>claimed?null:(claimed=true,{booking_id:'b',session_id:'s',booking_date:booking.booking_date,booking_time:booking.booking_time,delivery_parts:currentParts}),getBooking:async()=>booking,saveParts:async(_,parts)=>{currentParts={...parts};},finish:async(_,status)=>outcomes.push(status)};
+    const run=createReminderWorker({store,config,now:()=>new Date('2026-10-29T03:00:00Z'),logger:{error(){}},send:async p=>{sends.push(p.template.name);if(attempt++===1)throw {response:{status:400,data:{error:{code:132001}}}};return {messages:[{id:'message-'+attempt}]};}});
+    await run();assert.equal(currentParts._format,'full_v3');
+    config.format='full_v2';claimed=false;await run();
+    assert.deepEqual(outcomes,['failed','accepted']);
+    assert.deepEqual(sends,['tea_session_reminder_full_en_v3','tea_session_reminder_full_zh_v3','tea_session_reminder_full_zh_v3','tea_session_directions_v2']);
+});

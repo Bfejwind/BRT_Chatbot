@@ -1,0 +1,50 @@
+# Separate full-bot rehearsal service only. Not deployed yet.
+services:
+  - type: web
+    name: brt-meta-full-staging
+    runtime: node
+    plan: free
+    branch: codex/meta-full-staging
+    buildCommand: npm ci
+    startCommand: node scripts/full-staging-server.js
+    autoDeployTrigger: 'off'
+    healthCheckPath: /health
+    envVars:
+      - key: BOT_STAGING
+        value: "true"
+      - key: STAGING_ENV_FROM_HOST
+        value: "true"
+      - key: WHATSAPP_PROVIDER
+        value: meta
+      - key: META_TEST_ENABLED
+        value: "false"
+      - key: META_GRAPH_API_VERSION
+        value: v26.0
+      - key: BOOKING_REMINDER_FORMAT
+        value: full_v4
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: GOOGLE_CALENDAR_ID
+        sync: false
+      - key: GOOGLE_CREDENTIALS_JSON
+        sync: false
+      - key: META_ACCESS_TOKEN
+        sync: false
+      - key: META_PHONE_NUMBER_ID
+        sync: false
+      - key: META_WABA_ID
+        sync: false
+      - key: META_APP_SECRET
+        sync: false
+      - key: VERIFY_TOKEN
+        sync: false
+      - key: STAGING_RECIPIENTS
+        sync: false
+      - key: STAFF_PHONE_NUMBER
+        sync: false
+      - key: WHATSAPP_BOOKING_DATE_FLOW_ID
+        sync: false
+      - key: STAGING_BASELINE_JSON
+        sync: false
