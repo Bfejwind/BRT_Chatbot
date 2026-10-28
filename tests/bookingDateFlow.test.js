@@ -93,6 +93,7 @@ function handlerFixture(f) {
         readDateFlowReply: (reply, draft, available) => readDateFlowReply(reply, draft, available, 2000),
         handleBookingDate: async (...args) => selected.push(args),
         sendMessage: async (...args) => messages.push(args),
+        offerBookingRestart: async () => {},
         sendAvailableDates: async () => { reopened++; }
     };
     vm.createContext(context);

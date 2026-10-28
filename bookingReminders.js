@@ -1,5 +1,5 @@
 const DAY_MS = 24 * 60 * 60 * 1000;
-const isFullFormat=format=>['full_v2','full_v3','full_v4'].includes(format);
+const isFullFormat=format=>['full_v2','full_v3','full_v4','full_v5','full_v6'].includes(format);
 
 function singaporeDate(date) {
     return date.toLocaleDateString("en-CA", { timeZone: "Asia/Singapore" });
@@ -74,7 +74,7 @@ function createReminderWorker({ store, send, config, now = () => new Date(), log
                         if (!messageId) throw new Error("WhatsApp returned no message ID");
                         if(isFullFormat(format)) {
                             parts[index]=messageId;
-                            if(['full_v3','full_v4'].includes(format))parts._format=format;
+                            if(['full_v3','full_v4','full_v5','full_v6'].includes(format))parts._format=format;
                             // A checkpoint failure is ambiguous: never resend this part.
                             await store.saveParts(job,parts);
                         }

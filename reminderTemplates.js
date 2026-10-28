@@ -37,7 +37,7 @@ const chinese = `尊敬的来宾：
 ●请避免食用葱、姜、蒜、咖喱及其他辛辣食物。
 ●请避免使用浓烈的香水。
 ●活动前1小时请避免大量进食。
-明天{{7}}见！祝您今天过得愉快。`;
+明天{{7}}见！祝您有愉快的一天。`;
 function bodyDefinition(name, language, text, samples) {
     return { name, language, category:'UTILITY', components:[{
         type:'BODY', text, example:{body_text:[samples]}
@@ -54,6 +54,8 @@ const definitions = [
     ] }
 ];
 function reminderSequence(booking,format='full_v2') {
+    if(format==='full_v6')return require('./reminderRevision6').sequence(booking);
+    if(format==='full_v5')return require('./reminderRevision5').sequence(booking);
     if(format==='full_v4')return require('./reminderRevision4').sequence(booking);
     if(format==='full_v3')return require('./reminderDraft').sequence(booking);
     const start = new Date(`${booking.booking_date}T${booking.booking_time}+08:00`);
@@ -74,6 +76,8 @@ function reminderSequence(booking,format='full_v2') {
     }));
 }
 function getDefinitions(format='full_v2'){
+    if(format==='full_v6')return require('./reminderRevision6').definitions;
+    if(format==='full_v5')return require('./reminderRevision5').definitions;
     if(format==='full_v4')return require('./reminderRevision4').definitions;
     return format==='full_v3'?require('./reminderDraft').definitions:definitions;
 }

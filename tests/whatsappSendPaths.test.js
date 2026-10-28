@@ -177,3 +177,35 @@ test("booking window spans three calendar months and clamps month ends", () => {
     assert.equal(context.getBookingDates(new Date("2026-10-05T00:00:00+08:00")).at(-1), "2027-01-05");
     assert.equal(context.getBookingDates(new Date("2026-11-30T00:00:00+08:00")).at(-1), "2027-02-28");
 });
+
+
+test("policy menu precedes Contact and restart points to the booking entry", async () => {
+    for (const language of ["en", "zh"]) {
+        const payloads = [];
+        const menu = handler("sendMainMenu", {
+            userLanguages: { customer: language }, images: {},
+            sendImage: async () => {}, process: { env: {} },
+            postWhatsApp: async (_, payload) => payloads.push(payload)
+        });
+        await menu("customer");
+        const rows = payloads[0].interactive.action.sections[0].rows;
+        assert.equal(rows.at(-2).id, "CANCELLATION_POLICY");
+        assert.equal(rows.at(-1).id, "CONTACT");
+        assert.ok(rows.every(row => row.title.length <= 24));
+        let options;
+        await handler("offerBookingRestart", {
+            getLanguage: () => language,
+            sendBookingJourneyButtons: async (_, text, buttons) => { options = buttons; }
+        })("customer");
+        assert.equal(options[0].id, "BOOKING");
+    }
+    let policy;
+    await handler("handleCancellationPolicy", {
+        getLanguage: () => "en", sendMessage: async (_, text) => { policy = text; }
+    })("customer");
+    assert.match(policy, /more than 2 hours/);
+    assert.match(policy, /less than 2 hours/);
+    assert.match(policy, /additional package use/);
+    assert.match(policy, /refund enquiries/i);
+    assert.ok(policy.endsWith("reserves all rights of interpretation."));
+});

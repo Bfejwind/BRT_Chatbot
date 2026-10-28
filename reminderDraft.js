@@ -13,23 +13,23 @@ const chinese=`尊敬的茶友：
 注意：为了让每位茶友都能享有最佳体验，茶荟开始后，我们可能无法安排迟到的茶友入场，敬请谅解。
 
 温馨提醒：
-●请穿宽松舒适、适合静坐的上衣和裤子。茶荟时间请穿袜子。
+●请穿宽松舒适、适合静坐的上衣和长裤。茶荟时间请穿袜子。
 ●请避免食用葱、姜、蒜、咖喱及其他辛辣食物，避免饮酒。活动前1小时请避免进食。
 ●茶荟可能流汗，若必要请自行携带更换的衣物。
 ●请避免使用香水。
-明天{{6}}见！祝您今天过得愉快。`;
+明天{{6}}见！祝您有愉快的一天。`;
 const english=[
     'Dear Tea Friends,', '',
     'Authentic Tea Essence Museum•Guanyiyangxing Tea Space welcomes you to our tea space tomorrow!', '',
-    '🕰️ To help you allow enough travel time, here is tomorrow’s schedule:', '',
+    '🕰️ To help you plan your travel, here is tomorrow’s schedule.', '',
     '{{1}} - {{2}}: Registration ',
     '{{3}} - {{4}}: Tea Session introduction; take your seat and wait quietly for the session to begin ',
     '{{5}}: Tea Session begins', '',
     'Please note: To give everyone the best experience, we may not be able to admit late arrivals once the session has begun. Thank you for your understanding.', '',
     'Gentle reminders: ',
-    '●Wear loose, comfortable tops and trousers suitable for sitting. Please wear socks for the session.', ' ',
+    '●Wear loose, comfortable tops and long pants suitable for sitting. Please wear socks for the session.', ' ',
     '●Avoid onion, ginger, garlic, curry, other spicy foods and alcohol. Please avoid eating for 1 hour before the session. ', '',
-    '●You may perspire during the gathering. Bring a change of clothes if needed. ', '',
+    '●You may perspire during the tea session. Bring a change of clothes if needed. ', '',
     '●Please avoid wearing perfume. ', '',
     'See you tomorrow {{6}}! Have a lovely day ahead.'
 ].join('\n');

@@ -123,8 +123,8 @@ test("declining package purchase sends a private request to staff in both langua
             assert.equal(f.staff.length, 1);
             assert.match(f.staff[0][1], /private tea session/);
             assert.equal(f.messages.at(-1), chinese
-                ? "感谢您的关注，工作人员会尽快回复您，协助安排您的私人场次。"
-                : "Thank you for your interest, a Staff member will reply as soon as possible to help arrange your private session");
+                ? "感谢您的关注，工作人员会尽快回复您，协助安排您的私人场次。\n\n我们的工作时间为新加坡时间中午12.00至下午17.30。"
+                : "Thank you for your interest, a Staff member will reply as soon as possible to help arrange your private session.\n\nOur working hours are 12.00pm to 17.30pm Singapore Time.");
             await f.journey.select("customer", "NO_BUY");
             assert.equal(f.staff.length, 1);
         }
@@ -137,4 +137,17 @@ test("private requests and package purchases go to staff without opening booking
     await f.journey.begin("customer"); await f.journey.select("customer", "RETURNING");
     await f.journey.select("customer", "NO_PACKAGE"); await f.journey.select("customer", "BUY");
     assert.equal(f.staff.length, 2); assert.equal(f.dates.length, 0);
+});
+
+
+test("expired journey selection offers a working restart button", async () => {
+    for (const chinese of [false, true]) {
+        const f = fixture(null, chinese);
+        await f.journey.begin("customer");
+        await f.journey.select("customer", "PUBLIC");
+        assert.equal(f.menus.at(-1)[0].id, "JOURNEY_RESTART");
+        await f.journey.select("customer", "RESTART");
+        assert.equal(f.draft().journey_step, "first");
+        assert.equal(f.menus.at(-1)[0].id, "JOURNEY_FIRST");
+    }
 });

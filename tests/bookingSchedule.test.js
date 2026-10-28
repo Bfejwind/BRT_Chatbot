@@ -114,3 +114,14 @@ test("booking persistence rejects old 1 PM and 3 PM options", async () => {
     }
     for (const time of config.startTimes) await db.saveBookingTime("customer", time);
 });
+
+
+test("booking lead time uses two calendar days in Singapore across month boundaries", () => {
+    const source = fs.readFileSync(path.join(__dirname, "../server.js"), "utf8");
+    const context = vm.createContext({ BOOKING_CONFIG: config });
+    vm.runInContext(source.slice(source.indexOf("function getBookingDates("),
+        source.indexOf("async function sendAvailableDates(")), context);
+    assert.equal(context.getBookingDates(new Date("2026-10-28T15:59:00Z"))[0], "2026-10-30");
+    assert.equal(context.getBookingDates(new Date("2026-10-28T16:00:00Z"))[0], "2026-10-31");
+    assert.equal(context.getBookingDates(new Date("2026-10-31T04:00:00Z"))[0], "2026-11-02");
+});

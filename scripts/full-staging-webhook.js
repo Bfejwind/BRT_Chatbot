@@ -1,7 +1,10 @@
 // Route only the existing test WABA. Production/app-wide callback is never changed.
 const axios=require('axios');
 const {loadStaging}=require('./full-staging-server');
-const CALLBACK='https://brt-meta-full-staging.onrender.com/webhook';
+const callbackArgument=process.argv.indexOf('--callback');
+const CALLBACK=callbackArgument<0?'https://brt-meta-full-staging.onrender.com/webhook':process.argv[callbackArgument+1];
+if(!['https://brt-meta-full-staging.onrender.com/webhook',
+ 'https://brt-meta-rehearsal.onrender.com/webhook'].includes(CALLBACK))throw Error('Known isolated staging callback required');
 async function run(){
  const {stage:e}=loadStaging();
  if(e.META_WABA_ID!=='1011343481959468'||e.META_PHONE_NUMBER_ID!=='1334566233068780')throw Error('Test WABA required');

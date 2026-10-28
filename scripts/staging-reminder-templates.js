@@ -8,7 +8,7 @@ async function run(){
  if(c.wabaId!=='1011343481959468'||c.phoneNumberId!=='1334566233068780')throw Error('Test account required');
  const base=`https://graph.facebook.com/${c.version}`,headers={Authorization:`Bearer ${c.accessToken}`};
  const existing=await listTemplates(c,axios.get);
- for(const original of getDefinitions('full_v4')){
+ for(const original of getDefinitions(process.argv.includes('--v6')?'full_v6':'full_v4')){
   const found=existing.find(t=>t.name===original.name&&t.language===original.language);
   if(found){console.log(JSON.stringify({name:found.name,status:found.status}));continue;}
   if(!process.argv.includes('--submit')){console.log(JSON.stringify({name:original.name,status:'MISSING'}));continue;}

@@ -2,6 +2,21 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const draft=require('../reminderDraft');
 const active=require('../reminderTemplates');
+
+test('v6 uses the reviewed bilingual copy and preserves older queued revisions',()=>{
+    const revision=require('../reminderRevision6');
+    const booking={customer_phone:'6582064900',booking_date:'2026-10-30',booking_time:'16:00'};
+    const [en,zh]=revision.preview(booking);
+    assert.ok(en.includes('To help you plan your travel, here is tomorrow’s schedule.'));
+    assert.ok(en.includes('tops and long pants suitable for sitting.'));
+    assert.ok(en.includes('You may perspire during the tea session.'));
+    assert.ok(zh.includes('适合静坐的上衣和长裤'));
+    assert.ok(zh.includes('祝您有愉快的一天。'));
+    assert.deepEqual(active.reminderSequence(booking,'full_v6').map(p=>p.template.name),
+        ['tea_session_reminder_full_en_v6','tea_session_reminder_full_zh_v6','tea_session_directions_v2']);
+    assert.equal(active.reminderSequence(booking,'full_v5')[0].template.name,'tea_session_reminder_full_en_v5');
+    for(const d of revision.definitions) assert.ok(d.components.find(c=>c.type==='BODY').text.length<=1024);
+});
 test('Chinese reminder draft matches the requested wording and keeps the existing PDF',()=>{
     const [en,zh]=draft.preview({booking_date:'2026-10-30',booking_time:'16:00:00'});
     assert.ok(zh.startsWith('尊敬的茶友：'));
@@ -24,7 +39,7 @@ test('draft times remain dynamic for private sessions',()=>{
 });
 test('revised English preserves owner wording and blank lines between reminders',()=>{
     const [en]=draft.preview({booking_date:'2026-10-30',booking_time:'16:00:00'});
-    assert.ok(en.includes('tomorrow’s schedule:'));
+    assert.ok(en.includes('tomorrow’s schedule.'));
     assert.ok(en.includes('4:00pm - 4:15pm: Registration \n4:15pm - 4:30pm: Tea Session introduction;'));
     assert.ok(en.includes('Please wear socks for the session.\n \n●Avoid'));
     assert.ok(en.includes('Bring a change of clothes if needed. \n\n●Please avoid wearing perfume. \n\nSee you tomorrow afternoon!'));
