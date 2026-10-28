@@ -15,7 +15,7 @@ function createBookingJourney({ getDraft, startBooking, checkPackage, sendButton
             ? "若您希望预约私人场次，温馨提醒您：首次体验优惠价不适用于私人预约。私人场次收费有所不同，需要由工作人员协助安排。我们很乐意为您介绍价格并安排到访。"
             : "若您希望预约私人场次，温馨提醒您：会员配套不适用于私人预约。私人场次收费有所不同，需要由工作人员协助安排。我们很乐意为您介绍价格并安排到访。";
         await ask(from, "Would you prefer a public or private session?\n\n" +
-            (draft.first_visit ? "$68 promotional public session for first trial\n\n" : "") + privateEn,
+            (draft.first_visit ? "$68 promotional public session for the first trial\n\n" : "") + privateEn,
             "您希望参加公众场次还是私人场次？\n\n" +
             (draft.first_visit ? "$68首次体验优惠公众场次\n\n" : "") + privateZh, [
                 ["PUBLIC", draft.first_visit ? "Promo $68 Public" : "Public session", draft.first_visit ? "$68优惠公众场次" : "公众场次"], ["PRIVATE", "Private session", "私人场次"]
