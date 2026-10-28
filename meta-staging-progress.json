@@ -1,0 +1,80 @@
+{
+  "date": "2026-10-27",
+  "productionTransferred": false,
+  "reminderReview": {
+    "recipient": "6582064900",
+    "bookingCreated": false,
+    "dateShown": "2026-10-27",
+    "timeShown": "16:00",
+    "partsAccepted": [
+      "tea_session_reminder_full_en_v3",
+      "tea_session_reminder_full_zh_v3",
+      "tea_session_directions_v2"
+    ],
+    "phoneDeliveryConfirmed": false
+  },
+  "stagingDatabase": {
+    "ref": "zbpngdftvdgqctgfyxsb",
+    "tables": 10,
+    "functions": 15,
+    "customerDataCopied": false,
+    "transactionalRehearsal": "passed with public cancellation limitation recorded"
+  },
+  "calendarRehearsal": "synthetic insert/read/delete passed, event cleaned up",
+  "localRegressionTestsPassed": 104,
+  "monitoring": "manual aggregate run; no automatic alert schedule",
+  "blockers": [
+    "owner phone-to-full-bot verification pending",
+    "test English and directions templates pending approval",
+    "connected booking/package/reminder rehearsal incomplete",
+    "coexistence billing/provider-release route awaiting specialist confirmation",
+    "coordinate exposed credential rotation before cutover"
+  ],
+  "dependencyAuditFindings": 0,
+  "hostedLauncherPrepared": true,
+  "fullStagingDeployed": true,
+  "v4Approvals": {
+    "en": "approved",
+    "zh_CN": "approved"
+  },
+  "supportStatus": {
+    "caseId": "1104791312160964",
+    "status": "Received / active",
+    "reply": "Referred to WhatsApp contact page; coexistence/provider-release procedure not confirmed",
+    "escalation": "send attempted; delivery not verified"
+  },
+  "stagingCredentials": {
+    "supabase": "validated",
+    "metaTestToken": "refreshed and validated"
+  },
+  "localSmokeTest": "full bot started on port 3200; health HTTP 200; stopped after check",
+  "calendarReadiness": "read access validated",
+  "fullStaging": {
+    "service": "brt-meta-full-staging",
+    "serviceId": "srv-dbg1heijnfac73f08340",
+    "url": "https://brt-meta-full-staging.onrender.com",
+    "branch": "codex/meta-full-staging",
+    "commit": "d6850294e23e4b1114afc035697227b341717679",
+    "plan": "free",
+    "autoDeploy": false,
+    "health": "HTTP 200",
+    "testWebhookOverrideVerified": true,
+    "appWideCallbackUnchanged": true,
+    "remindersEnabled": false
+  },
+  "testFlow": {
+    "id": "1662263118698196",
+    "status": "PUBLISHED",
+    "configured": true
+  },
+  "testTemplates": {
+    "en": "pending",
+    "zh_CN": "approved",
+    "directions": "pending"
+  },
+  "credentialRotationRequired": [
+    "Meta app secret exposed in diagnostic tool output",
+    "Google service-account private key exposed in diagnostic tool output",
+    "staging verify token exposed in diagnostic tool output"
+  ]
+}

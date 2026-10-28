@@ -1,0 +1,20 @@
+{
+  "checkedAt": "2026-10-27T03:05:00.956Z",
+  "checks": [
+    {
+      "name": "tea_session_reminder_full_en_v4",
+      "status": "APPROVED",
+      "bodyMatches": true
+    },
+    {
+      "name": "tea_session_reminder_full_zh_v4",
+      "status": "APPROVED",
+      "bodyMatches": true
+    },
+    {
+      "name": "tea_session_directions_v2",
+      "status": "APPROVED",
+      "bodyMatches": true
+    }
+  ]
+}

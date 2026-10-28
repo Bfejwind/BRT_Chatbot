@@ -1,0 +1,8 @@
+{
+  "checkedAt": "2026-10-27T03:25:18.817Z",
+  "invalidSignatureHttpStatus": 401,
+  "signedNonAllowlistedSenderHttpStatus": 403,
+  "expectedStatuses": true,
+  "customerSendRequested": false,
+  "result": "passed: invalid signatures and non-allowlisted senders rejected"
+}

@@ -1,0 +1,33 @@
+# Optional separate Render service. This does not modify the production service.
+# Creating a hosted service may incur hosting charges; no service is created by this file.
+services:
+  - type: web
+    name: brt-meta-test
+    runtime: node
+    plan: free
+    branch: codex/meta-staging
+    buildCommand: npm ci
+    startCommand: node scripts/meta-test-server.js
+    healthCheckPath: /health
+    autoDeployTrigger: 'off'
+    envVars:
+      - key: META_TEST_HOST
+        value: 0.0.0.0
+      - key: META_TEST_ENABLED
+        value: "true"
+      - key: WHATSAPP_PROVIDER
+        value: 360dialog
+      - key: META_GRAPH_API_VERSION
+        value: v26.0
+      - key: META_APP_SECRET
+        sync: false
+      - key: META_TEST_ACCESS_TOKEN
+        sync: false
+      - key: META_TEST_PHONE_NUMBER_ID
+        value: "1334566233068780"
+      - key: META_TEST_WABA_ID
+        value: "1011343481959468"
+      - key: META_TEST_VERIFY_TOKEN
+        sync: false
+      - key: META_TEST_RECIPIENTS
+        value: "6582064900"

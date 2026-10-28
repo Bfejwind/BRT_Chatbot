@@ -1,0 +1,12 @@
+{
+  "checkedAt": "2026-10-28T01:12:34.096Z",
+  "healthHttp": 200,
+  "unauthenticatedWebhook": 401,
+  "authenticatedEmptyWebhook": 200,
+  "ownerConfirmedMenuReply": true,
+  "newAccount": "xcorpedutechvietnam@gmail.com",
+  "serviceUrl": "https://brt-chatbot-live.onrender.com",
+  "provider": "360dialog",
+  "reminderFormat": "full_v5",
+  "freePlanSelectedByOwner": true
+}

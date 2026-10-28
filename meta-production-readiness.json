@@ -1,0 +1,109 @@
+{
+  "activeProductionProvider": "360dialog",
+  "mutationsPerformed": false,
+  "productionCutoverReady": false,
+  "apiChecksPassed": false,
+  "checks": [
+    {
+      "name": "token",
+      "status": "passed",
+      "detail": {
+        "appMatches": true,
+        "type": "SYSTEM_USER",
+        "expiresAt": 0,
+        "dataAccessExpiresAt": 0,
+        "scopes": [
+          "whatsapp_business_management",
+          "whatsapp_business_messaging",
+          "public_profile"
+        ]
+      }
+    },
+    {
+      "name": "number_ownership",
+      "status": "passed"
+    },
+    {
+      "name": "booking_flow",
+      "status": "passed",
+      "detail": {
+        "id": "28782493828041844",
+        "name": "tea_booking_date",
+        "status": "PUBLISHED"
+      }
+    },
+    {
+      "name": "reminder_templates",
+      "status": "passed",
+      "detail": [
+        {
+          "name": "tea_session_reminder_full_en_v4",
+          "language": "en",
+          "status": "APPROVED"
+        },
+        {
+          "name": "tea_session_reminder_full_zh_v4",
+          "language": "zh_CN",
+          "status": "APPROVED"
+        },
+        {
+          "name": "tea_session_directions_v2",
+          "language": "en",
+          "status": "APPROVED"
+        }
+      ]
+    },
+    {
+      "name": "phone",
+      "status": "passed",
+      "detail": {
+        "phone": "+65 80583517",
+        "quality": "GREEN",
+        "codeVerificationStatus": "NOT_VERIFIED"
+      }
+    },
+    {
+      "name": "app_subscription",
+      "status": "unverified",
+      "detail": {
+        "code": "ECONNABORTED"
+      }
+    },
+    {
+      "name": "app_secret",
+      "status": "passed"
+    },
+    {
+      "name": "webhook_verify_token",
+      "status": "passed"
+    },
+    {
+      "name": "direct_billing",
+      "status": "unverified",
+      "detail": "Confirm the billing arrangement for the destination WABA before migration."
+    },
+    {
+      "name": "number_migration",
+      "status": "unverified",
+      "detail": "Confirm registration/migration and coexistence requirements with Meta and 360dialog; not performed."
+    },
+    {
+      "name": "live_inbound_webhook",
+      "status": "unverified",
+      "detail": "Isolated test-number inbound/reply and delivered receipts passed on 2026-10-26. Production routing and complete booking journey remain unverified until authorized cutover."
+    }
+  ],
+  "checkedAt": "2026-10-28T07:52:08.177Z",
+  "followUp": {
+    "date": "2026-10-26",
+    "localTestsPassed": 98,
+    "coexistenceRequired": true,
+    "isOnBusinessApp": true,
+    "currentPaymentMethod": "360dialog GmbH credit line",
+    "billingDetailAccess": "Owner identity check completed; account payment details inspected",
+    "subscriptionRead": "Narrow fields-limited GET also timed out; subscription state remains unverified",
+    "productionChangesPerformed": false,
+    "supportRequest": "Meta support intake submitted and full request placed in chat 2026-10-26. UI says Message sent/You sent but still Sending; delivery and case creation unconfirmed. No 360dialog message sent.",
+    "billingDetails": "360dialog GmbH default credit line, credit availability High; no direct method listed; add-payment flow not submitted"
+  }
+}

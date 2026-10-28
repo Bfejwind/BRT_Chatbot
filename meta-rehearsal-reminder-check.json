@@ -1,0 +1,23 @@
+{
+  "checkedAt": "2026-10-28T08:07:17.323Z",
+  "isolated": true,
+  "bookingId": "1a53bcc0-abb6-4912-9458-d6cc86b94e5f",
+  "format": "full_v6",
+  "parts": [
+    {
+      "name": "tea_session_reminder_full_en_v6",
+      "status": "accepted",
+      "messageId": "wamid.HBgKNjU4MjA2NDkwMBUCABEYEjA1MDgwMkQzRjk1MzJFQzJEQgA="
+    },
+    {
+      "name": "tea_session_reminder_full_zh_v6",
+      "status": "accepted",
+      "messageId": "wamid.HBgKNjU4MjA2NDkwMBUCABEYEjI2MzlCQTExNkE1ODYzOUNCMgA="
+    },
+    {
+      "name": "tea_session_directions_v2",
+      "status": "accepted",
+      "messageId": "wamid.HBgKNjU4MjA2NDkwMBUCABEYEjAzMDhCMTBCQTQxOUNENEYwNwA="
+    }
+  ]
+}

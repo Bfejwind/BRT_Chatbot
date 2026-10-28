@@ -1,0 +1,79 @@
+{
+  "checkedAt": "2026-10-28T07:45:36.926Z",
+  "isolation": "passed",
+  "mutationsPerformed": false,
+  "checks": [
+    {
+      "name": "meta_phone",
+      "status": "passed",
+      "detail": {
+        "id": "1334566233068780"
+      }
+    },
+    {
+      "name": "meta_subscription",
+      "status": "passed",
+      "detail": {
+        "subscribed": true
+      }
+    },
+    {
+      "name": "booking_flows",
+      "status": "passed",
+      "detail": {
+        "ready": true,
+        "configured": true,
+        "flows": [
+          {
+            "id": "1662263118698196",
+            "name": "tea_booking_date",
+            "status": "PUBLISHED"
+          }
+        ]
+      }
+    },
+    {
+      "name": "calendar",
+      "status": "passed",
+      "detail": {
+        "accessible": true,
+        "timeZone": "Asia/Singapore"
+      }
+    },
+    {
+      "name": "reminder_templates",
+      "status": "passed",
+      "detail": {
+        "ready": true,
+        "templates": [
+          {
+            "name": "tea_session_reminder_full_en_v4",
+            "status": "APPROVED"
+          },
+          {
+            "name": "tea_session_reminder_full_zh_v4",
+            "status": "APPROVED"
+          },
+          {
+            "name": "tea_session_directions_v2",
+            "status": "APPROVED"
+          }
+        ]
+      }
+    },
+    {
+      "name": "database_runtime_client",
+      "status": "passed",
+      "detail": {
+        "accessible": true
+      }
+    },
+    {
+      "name": "database",
+      "status": "passed",
+      "detail": {
+        "tablesAccessible": 10
+      }
+    }
+  ]
+}

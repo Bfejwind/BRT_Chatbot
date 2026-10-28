@@ -4,7 +4,14 @@ const express = require("express");
 const axios = require("axios");
 const { createDateFlowMessage, readDateFlowReply } = require("./bookingDateFlow");
 const BOOKING_CONFIG = require("./bookingSchedule");
-const { postWhatsApp } = require("./whatsappSender");
+const { postWhatsApp, createWhatsAppSender } = require("./whatsappSender");
+const { providerConfig, validateMeta, messageRequest } = require('./whatsappProvider');
+const { metaAuthentication, mountMetaTestWebhook } = require('./metaWebhook');
+const activeWhatsApp = providerConfig();
+if (activeWhatsApp.provider === 'meta') validateMeta(activeWhatsApp);
+if (activeWhatsApp.provider === 'meta' && !process.env.META_APP_SECRET) {
+    throw new Error('META_APP_SECRET is required for direct Meta webhooks');
+}
 const { startBookingReminders, reminderPayload } = require("./bookingReminders");
 const { reminderTestSelection, shouldSkipReminderTest } = require("./reminderTestGuard");
 const {
@@ -35,6 +42,7 @@ const interactionHandlers = {
     THINGS_TO_NOTE: handleThingsToNote,
     BOOKING: handleBooking,
     CONTACT: handleContact,
+    CANCELLATION_POLICY: handleCancellationPolicy,
     BOOK_CONFIRM: handleBookingConfirm,
     BOOK_CANCEL: handleBookingCancel,
 
@@ -128,6 +136,11 @@ app.use(express.json({
     }
 }));
 
+const metaTestSender=createWhatsAppSender({post:(...request)=>axios.post(...request)});
+mountMetaTestWebhook(app,{
+    send:payload=>metaTestSender(...messageRequest(providerConfig(process.env,{test:true}),payload))
+});
+
 const PORT = process.env.PORT || 3000;
 
 // Public landing page. Meta's app review asks for a website that shows
@@ -186,128 +199,13 @@ app.get("/health", (req, res) => {
     res.status(200).json({ status: "ok" });
 });
 
-// Phase 5/6: Embedded Signup landing page.
-// This is the exact URL entered as the Valid OAuth Redirect URI
-// and covered by the Allowed Domain in Facebook Login for Business settings.
-app.get("/connect-whatsapp", (req, res) => {
-    res.send(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <title>Connect WhatsApp</title>
-        </head>
-        <body>
-            <h1>Connect your WhatsApp number</h1>
-            <button id="launch-signup">Connect WhatsApp</button>
-            <p id="status"></p>
-
-            <script>
-                window.fbAsyncInit = function () {
-                    FB.init({
-                        appId: "${process.env.FACEBOOK_APP_ID}",
-                        autoLogAppEvents: true,
-                        xfbml: true,
-                        version: "v21.0"
-                    });
-                };
-            </script>
-            <script async defer crossorigin="anonymous"
-                src="https://connect.facebook.net/en_US/sdk.js">
-            </script>
-
-            <script>
-                document.getElementById("launch-signup").onclick = function () {
-                    const statusEl = document.getElementById("status");
-                    statusEl.textContent = "Opening WhatsApp signup...";
-
-                    FB.login(function (response) {
-                        if (response.authResponse && response.authResponse.code) {
-                            statusEl.textContent = "Finishing setup...";
-
-                            fetch("/whatsapp-signup/exchange", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({
-                                    code: response.authResponse.code
-                                })
-                            })
-                                .then(res => res.json())
-                                .then(data => {
-                                    statusEl.textContent = data.success
-                                        ? "WhatsApp connected successfully."
-                                        : "Setup failed: " + (data.error || "unknown error");
-                                })
-                                .catch(err => {
-                                    statusEl.textContent = "Setup failed: " + err.message;
-                                });
-                        } else {
-                            statusEl.textContent = "Signup was cancelled or did not complete.";
-                        }
-                    }, {
-                        config_id: "${process.env.EMBEDDED_SIGNUP_CONFIG_ID}",
-                        response_type: "code",
-                        override_default_response_type: true,
-                        extras: {
-                            version: "v3",
-                            setup: {},
-                            featureType: "whatsapp_business_app_onboarding"
-                        }
-                    });
-                };
-            </script>
-        </body>
-        </html>
-    `);
+// Meta account setup is staff-managed until authenticated customer onboarding exists.
+// Do not exchange a public code and report a connection that was never persisted.
+app.get('/connect-whatsapp', (req,res)=>{
+    res.status(200).send('<!doctype html><html><head><meta charset="utf-8"><title>WhatsApp account connection</title></head><body><h1>WhatsApp account connection</h1><p>Account connections are currently managed by staff. Please contact your service administrator to connect a business account.</p></body></html>');
 });
-
-// Phase 7: Exchanges the Embedded Signup "code" for a token,
-// then completes onboarding for the returned WABA/phone number.
-// NOTE: this is scaffolding for Phase 7 — the actual onboarding API
-// calls (registering the number, subscribing the app to the WABA)
-// still need to be filled in once you reach that phase and have
-// a WABA ID / phone number ID coming back from Meta to test against.
-app.post("/whatsapp-signup/exchange", async (req, res) => {
-    const { code } = req.body;
-
-    if (!code) {
-        return res.status(400).json({ success: false, error: "Missing code" });
-    }
-
-    try {
-        const tokenResponse = await axios.get(
-            "https://graph.facebook.com/v21.0/oauth/access_token",
-            {
-                params: {
-                    client_id: process.env.FACEBOOK_APP_ID,
-                    client_secret: process.env.META_APP_SECRET,
-                    code
-                }
-            }
-        );
-
-        const accessToken = tokenResponse.data.access_token;
-
-        // TODO (Phase 7): use accessToken to call the debug_token
-        // endpoint to retrieve the granular_scopes, which contain
-        // the new WABA ID and phone number ID Meta just created,
-        // then call the register/onboarding endpoints for that number.
-
-        console.log("Embedded Signup token exchange succeeded.");
-
-        res.json({ success: true });
-
-    } catch (error) {
-        console.error(
-            "Embedded Signup token exchange failed:",
-            error.response?.data || error.message
-        );
-
-        res.status(500).json({
-            success: false,
-            error: "Token exchange failed"
-        });
-    }
+app.post('/whatsapp-signup/exchange', (req,res)=>{
+    res.status(501).json({success:false,error:'Self-service account connection is not enabled. Contact your service administrator.'});
 });
 
 // NOTE: Webhooks now arrive from 360dialog, not directly from Meta.
@@ -351,6 +249,8 @@ app.get("/webhook", (req, res) => {
 
     if (
         mode === "subscribe" &&
+        typeof process.env.VERIFY_TOKEN === 'string' && process.env.VERIFY_TOKEN.length > 0 &&
+        typeof challenge === 'string' &&
         token === process.env.VERIFY_TOKEN
     ) {
         console.log("Webhook verified");
@@ -492,7 +392,7 @@ async function sendMainMenu(to) {
             to,
             images.mainMenuBanner,
             isChinese
-                ? "欢迎！请问今天有什么可以帮到您？"
+                ? "欢迎光临！请问今天有什么可以协助您的？菜单选项正在加载，请稍等。"
                 : "Welcome! How can we help you today? Please wait while the menu options load."
         );
 
@@ -548,6 +448,11 @@ async function sendMainMenu(to) {
                                         title: isChinese ? "📍 交通指引" : "📍 Directions"
                                     },
                                     {
+                                        id: "CANCELLATION_POLICY",
+                                        title: isChinese ? "📜 取消与退款政策" : "📜 Cancellation & Refund",
+                                        description: isChinese ? "改期、取消及退款安排" : "Cancellation & Refund Policy"
+                                    },
+                                    {
                                         id: "CONTACT",
                                         title: isChinese
                                             ? "📞 联系我们"
@@ -591,8 +496,8 @@ async function sendFAQDocument(to) {
     await sendMessage(
         to,
         isChinese
-            ? "常见问题已在上方文件中解答，请下载并查看。如有文件以外的其他问题，请直接提问，工作人员会尽快回复您。"
-            : "Frequently asked questions are answered in this file above, kindly download and view. For any questions outside of this document, please ask and a member of staff will reply as soon as possible"
+            ? "常见问题已在上方文件中解答，请下载并查看。如有文件以外的其他问题，请直接提问，工作人员会尽快回复您。\n\n我们的工作时间为新加坡时间中午12.00至下午17.30。"
+            : "Frequently asked questions are answered in this file above, kindly download and view. For any questions outside of this document, please ask and we will reply as soon as possible.\n\nOur working hours are 12.00pm to 17.30pm Singapore Time."
     );
 }
 
@@ -623,6 +528,7 @@ function getBookingDates(now = new Date()) {
         Math.min(start.getUTCDate(), lastDayNextMonth)
     ));
     const dates = [];
+    start.setUTCDate(start.getUTCDate() + 1);
     for (const date = new Date(start); date < end;) {
         date.setUTCDate(date.getUTCDate() + 1);
         const value = date.toISOString().slice(0, 10);
@@ -655,6 +561,7 @@ async function sendAvailableDates(to, page = 0) {
             await sendMessage(to, getLanguage(to) === "zh"
                 ? "预约已失效，请发送 Booking 重新开始。"
                 : "Your booking session expired. Send Booking to start again.");
+            await offerBookingRestart(to);
             return;
         }
         const payload = createDateFlowMessage({
@@ -974,6 +881,7 @@ async function sendBookingConfirmation(to) {
                 ? "预约资料不完整，请重新开始预约。"
                 : "Your booking details are incomplete. Please start again."
         );
+        await offerBookingRestart(to);
 
         return;
     }
@@ -1045,6 +953,7 @@ async function handleBookingConfirm(from) {
                     ? "找不到完整的预约信息，请重新开始预约。"
                     : "Your booking details are incomplete. Please start again."
             );
+        await offerBookingRestart(from);
             return;
         }
 
@@ -1155,7 +1064,7 @@ async function handleBookingConfirm(from) {
 async function sendConfirmedBookingToStaff(customerPhone, booking, route) {
     const packageTypes = {
         weekday: "Weekday", weekend: "Weekend", exclusive: "Exclusive", premium: "Premium", unlimited: "Unlimited",
-        first_public: "None — $68 promotional public session", no_package: "None"
+        first_public: "None — $68 promotional public session for first trial", no_package: "None"
     };
     await sendMessage(process.env.STAFF_PHONE_NUMBER,
         `Booking confirmed\n\nCustomer: +${customerPhone}\n` +
@@ -1194,7 +1103,7 @@ async function handleReminderTest(from, bookingId) {
     }
     // A customer-requested test does not claim or finish a scheduled reminder job.
     if(process.env.BOOKING_REMINDER_FORMAT !== 'legacy') {
-        for(const payload of require('./reminderTemplates').reminderSequence(booking)) {
+        for(const payload of require('./reminderTemplates').reminderSequence(booking,process.env.BOOKING_REMINDER_FORMAT||'full_v2')) {
             await postWhatsApp('https://waba-v2.360dialog.io/messages',payload,{
                 headers:{'D360-API-KEY':process.env.WHATSAPP_API_KEY},timeout:30000
             });
@@ -1535,6 +1444,19 @@ No phones during the session, guests will be asked to place their phones in a ba
     await sendMainMenu(from);
 }
 
+async function handleCancellationPolicy(from) {
+    await sendMessage(from, getLanguage(from) === "zh"
+        ? "📜 取消与退款政策\n\n如需改期，请于预约开始时间前超过2小时联系我们。我们很乐意协助安排，具体视名额而定。\n\n若在预约开始前不足2小时取消预约，该次预约仍会扣除配套次数；如需重新预约，将另扣一次配套次数。感谢您的理解。\n\n如需申请退款，请联系我们的工作人员。\n\n本活动最终解释权归 茶之相博物馆 · 观颐养性茶空间 所有"
+        : "📜 Cancellation & Refund Policy\n\nIf you wish to reschedule, please contact us more than 2 hours before your appointment. We will be happy to help, subject to availability.\n\nFor cancellations made less than 2 hours before the appointment, the package use for that appointment will still be deducted. Rescheduling will require an additional package use. Thank you for your understanding.\n\nFor refund enquiries, please contact a member of staff.\n\nPalace Museum Singapore · Authentic Tea Essence Museum · Guanyiyangxing Wellness Tea Space reserves all rights of interpretation.");
+}
+
+async function offerBookingRestart(from) {
+    const zh = getLanguage(from) === "zh";
+    await sendBookingJourneyButtons(from,
+        zh ? "此预约选项已失效。您可以从头重新选择预约。" : "This booking option has expired. You can restart the booking selection below.",
+        [{ id: "BOOKING", title: zh ? "重新预约" : "Restart booking" }]);
+}
+
 async function handleContact(from) {
     const isChinese = getLanguage(from) === "zh";
     
@@ -1568,6 +1490,7 @@ async function handleBookingDate(from, selectionId) {
                 ? "找不到您的预约记录，请重新开始预约。"
                 : "Your booking session could not be found. Please start again."
         );
+            await offerBookingRestart(from);
         return;
     }
 
@@ -1613,6 +1536,7 @@ async function handleBookingPartySize(from, selectionId) {
                     ? "预约资料已失效，请重新开始预约。"
                     : "Your booking session has expired. Please start again."
             );
+            await offerBookingRestart(from);
             return;
         }
 
@@ -1676,6 +1600,7 @@ async function handleBookingTime(from, selectionId) {
                 ? "找不到您选择的预约日期，请重新开始预约。"
                 : "Your booking date could not be found. Please start again."
         );
+            await offerBookingRestart(from);
         return;
     }
 
@@ -1887,8 +1812,8 @@ async function handleQuestionStaff(from) {
     await sendMessage(
         from,
         isChinese
-        ? "工作人员已收到通知，并会尽快回复您。"
-        : "A staff member has been notified and will get back to you as soon as possible."
+        ? "工作人员已收到通知，并会尽快回复您。\n\n我们的工作时间为新加坡时间中午12.00至下午17.30。"
+        : "A staff member has been notified and will get back to you as soon as possible.\n\nOur working hours are 12.00pm to 17.30pm Singapore Time."
     );
     
     await sendContactNavigation(from);
@@ -2044,8 +1969,8 @@ async function handleTextMessage(from, message) {
         await sendMessage(
             from,
             isChinese
-                ? "感谢您的问题。工作人员已收到通知，并会尽快回复您。"
-                : "Thanks for your question. A staff member has been notified and will get back to you as soon as possible."
+                ? "感谢您的问题。工作人员已收到通知，并会尽快回复您。\n\n我们的工作时间为新加坡时间中午12.00至下午17.30。"
+                : "Thanks for your question. A staff member has been notified and will get back to you as soon as possible.\n\nOur working hours are 12.00pm to 17.30pm Singapore Time."
         );
 
         await sendContactNavigation(from);
@@ -2061,8 +1986,8 @@ async function handleTextMessage(from, message) {
     await sendMessage(
         from,
         isChinese
-            ? "感谢您的留言。工作人员已收到通知，并会尽快回复您。"
-            : "Thanks for your message. A staff member has been notified and will get back to you as soon as possible."
+            ? "感谢您的留言。工作人员已收到通知，并会尽快回复您。\n\n我们的工作时间为新加坡时间中午12.00至下午17.30。"
+            : "Thanks for your message. A staff member has been notified and will get back to you as soon as possible.\n\nOur working hours are 12.00pm to 17.30pm Singapore Time."
     );
 
     await sendContactNavigation(from);
@@ -2079,6 +2004,7 @@ async function handleInteractiveMessage(from, message) {
             await sendMessage(from, getLanguage(from) === "zh"
                 ? "日期选择已失效，请重新选择。"
                 : "That date selection has expired. Please choose again.");
+            await offerBookingRestart(from);
             await sendAvailableDates(from);
             return;
         }
@@ -2143,6 +2069,9 @@ async function handleInteractiveMessage(from, message) {
 }
 
 function requireValid360DialogSecret(req, res, next) {
+    if (activeWhatsApp.provider === 'meta') {
+        return metaAuthentication(activeWhatsApp,{secret:process.env.META_APP_SECRET})(req,res,next);
+    }
     if (!verify360DialogWebhookSecret(req)) {
         console.warn(
             "Rejected webhook: invalid or missing webhook secret"
@@ -2160,6 +2089,11 @@ app.post(
     requireValid360DialogSecret,
     async (req, res) => {
         try {
+            if (process.env.BOT_STAGING === 'true') {
+                const allowed = new Set(String(process.env.STAGING_RECIPIENTS || '').split(',').map(p=>p.trim()));
+                const incoming = (req.body.entry || []).flatMap(e=>(e.changes || []).flatMap(c=>c.value?.messages || []));
+                if (incoming.some(m=>!allowed.has(m.from))) return res.sendStatus(403);
+            }
             const entries = req.body.entry || [];
 
             for (const entry of entries) {

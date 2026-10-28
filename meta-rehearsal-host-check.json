@@ -1,0 +1,33 @@
+{
+  "checkedAt": "2026-10-28T08:06:34.120Z",
+  "url": "https://brt-meta-rehearsal.onrender.com",
+  "customerSendRequested": false,
+  "passed": true,
+  "checks": [
+    {
+      "name": "health",
+      "status": 200,
+      "passed": true
+    },
+    {
+      "name": "unsigned_rejected",
+      "status": 401,
+      "passed": true
+    },
+    {
+      "name": "signed_empty_accepted",
+      "status": 200,
+      "passed": true
+    },
+    {
+      "name": "foreign_account_rejected",
+      "status": 403,
+      "passed": true
+    },
+    {
+      "name": "non_allowlisted_sender_rejected",
+      "status": 403,
+      "passed": true
+    }
+  ]
+}
