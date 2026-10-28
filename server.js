@@ -1194,7 +1194,7 @@ async function handleReminderTest(from, bookingId) {
     }
     // A customer-requested test does not claim or finish a scheduled reminder job.
     if(process.env.BOOKING_REMINDER_FORMAT !== 'legacy') {
-        for(const payload of require('./reminderTemplates').reminderSequence(booking)) {
+        for(const payload of require('./reminderTemplates').reminderSequence(booking, process.env.BOOKING_REMINDER_FORMAT || 'full_v2')) {
             await postWhatsApp('https://waba-v2.360dialog.io/messages',payload,{
                 headers:{'D360-API-KEY':process.env.WHATSAPP_API_KEY},timeout:30000
             });
