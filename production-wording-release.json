@@ -1,0 +1,14 @@
+{
+  "verifiedAt": "2026-10-28T08:58:54.868Z",
+  "serviceId": "srv-dbgkmjm7bikc73afi43g",
+  "commit": "b028eeffb2bf6e880c93881ad1d2b6ad3f7ef39d",
+  "deployId": "dep-dbgrhngu01pc73atp48g",
+  "status": "live",
+  "provider": "360dialog",
+  "reminderFormat": "full_v6",
+  "previousCommit": "b313c4f7ae4118e378864c7ae0ed80d3c49734d4",
+  "checksPassed": true,
+  "previewRecipient": "6582064900",
+  "previewPartsAccepted": 3,
+  "deliveryConfirmed": false
+}

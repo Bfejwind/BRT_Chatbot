@@ -1,0 +1,20 @@
+{
+  "checkedAt": "2026-10-28T09:42:22.775Z",
+  "readOnly": true,
+  "checks": [
+    {
+      "name": "old_key_authentication",
+      "accepted": false,
+      "httpStatus": 400,
+      "error": "invalid_grant"
+    },
+    {
+      "name": "production_calendar",
+      "accessible": true
+    },
+    {
+      "name": "staging_calendar",
+      "accessible": true
+    }
+  ]
+}

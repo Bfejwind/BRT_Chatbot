@@ -1,0 +1,22 @@
+{
+  "preparedAt": "2026-10-28T08:34:18.050Z",
+  "serviceId": "srv-dbgkmjm7bikc73afi43g",
+  "provider": "360dialog",
+  "previousCommit": "2808fefa57e5115262ec64447925ed8273ce5fc6",
+  "previousReminderFormat": "full_v5",
+  "targetCommit": "b313c4f7ae4118e378864c7ae0ed80d3c49734d4",
+  "targetReminderFormat": "full_v6",
+  "templateApprovalsVerified": true,
+  "productionDeploymentVerified": true,
+  "baseline": {
+    "failedPublicReminders": 4,
+    "unknownJobs": 0,
+    "staleSendingJobs": 0
+  },
+  "verifiedAt": "2026-10-28T08:38:13.702Z",
+  "deployId": "dep-dbgr7kon74is73d7fn7g",
+  "healthVerified": true,
+  "authenticated360dialogWebhookVerified": true,
+  "templateContentVerified": true,
+  "jobCountsUnchanged": true
+}

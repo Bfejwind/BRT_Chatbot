@@ -1,6 +1,21 @@
 # Meta support inquiry: coexistence provider release and direct billing
 
-## Follow-up prepared 28 October 2026 (not sent)
+## Follow-up sent 28 October 2026, 17:09 Singapore time
+
+Owner specifically approved disclosure of the business/app/messaging-account/phone
+identifiers and subscription error to Meta support. The existing case chat shows
+the complete follow-up under "Message sent 17:09 by You" and the composer cleared.
+It requests a specialist, a coexistence-compatible direct-Meta procedure and an
+exact return-to-360dialog procedure, with instructions not to change any assets.
+Before the follow-up, the case was marked Completed and its response only referred
+the owner to whatsapp.com/contact; no technical procedure was provided.
+Specialist response and reopening remain unverified.
+
+Production subscription check: the normal request timed out. A minimal page-one
+request with a 45-second timeout returned HTTP 500 / Meta error code 1. See
+meta-production-subscription-check.json. No subscription/callback was changed.
+
+### Prepared questions (included in the sent follow-up)
 
 For existing case 1104791312160964: please escalate to the WhatsApp Business
 Platform/coexistence team. We need an account-specific procedure for retaining

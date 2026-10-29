@@ -1,0 +1,61 @@
+{
+  "checkedAt": "2026-10-28T08:37:09.398Z",
+  "readOnly": true,
+  "attentionRequired": true,
+  "checks": [
+    {
+      "table": "booking_reminders",
+      "condition": "failed",
+      "count": 4,
+      "error": false
+    },
+    {
+      "table": "booking_reminders",
+      "condition": "unknown",
+      "count": 0,
+      "error": false
+    },
+    {
+      "table": "staff_private_reminders",
+      "condition": "failed",
+      "count": 0,
+      "error": false
+    },
+    {
+      "table": "staff_private_reminders",
+      "condition": "unknown",
+      "count": 0,
+      "error": false
+    },
+    {
+      "table": "booking_completion_jobs",
+      "condition": "unknown",
+      "count": 0,
+      "error": false
+    },
+    {
+      "table": "booking_reminders",
+      "condition": "sending_older_than_15_minutes",
+      "count": 0,
+      "error": false
+    },
+    {
+      "table": "staff_private_reminders",
+      "condition": "sending_older_than_15_minutes",
+      "count": 0,
+      "error": false
+    },
+    {
+      "table": "booking_completion_jobs",
+      "condition": "sending_older_than_15_minutes",
+      "count": 0,
+      "error": false
+    },
+    {
+      "table": "staff_private_bookings",
+      "condition": "calendar_pending_older_than_15_minutes",
+      "count": 0,
+      "error": false
+    }
+  ]
+}

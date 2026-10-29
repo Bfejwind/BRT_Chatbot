@@ -1,0 +1,19 @@
+{
+  "checkedAt": "2026-10-28T09:17:08.183Z",
+  "newKey": true,
+  "sameServiceAccount": true,
+  "privateKeyPrinted": false,
+  "checks": [
+    {
+      "environment": "production",
+      "accessible": true
+    },
+    {
+      "environment": "staging",
+      "accessible": true
+    }
+  ],
+  "passed": true,
+  "hostedRotationCompleted": false,
+  "oldKeyRevoked": false
+}

@@ -1,0 +1,45 @@
+{
+  "checkedAt": "2026-10-28T09:42:25.764Z",
+  "customerMessagesSent": false,
+  "passed": true,
+  "checks": [
+    {
+      "name": "health",
+      "httpStatus": 200,
+      "passed": true
+    },
+    {
+      "name": "unsigned_webhook_rejected",
+      "httpStatus": 401,
+      "passed": true
+    },
+    {
+      "name": "360dialog_authenticated_empty_event",
+      "httpStatus": 200,
+      "passed": true
+    },
+    {
+      "name": "meta_test_route_disabled",
+      "httpStatus": 404,
+      "passed": true
+    },
+    {
+      "name": "tea_session_reminder_full_en_v6",
+      "status": "approved",
+      "bodyMatches": true,
+      "passed": true
+    },
+    {
+      "name": "tea_session_reminder_full_zh_v6",
+      "status": "approved",
+      "bodyMatches": true,
+      "passed": true
+    },
+    {
+      "name": "tea_session_directions_v2",
+      "status": "approved",
+      "bodyMatches": true,
+      "passed": true
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "requestedAt": "2026-10-28T08:54:33.714Z",
+  "to": "6582064900",
+  "format": "full_v6",
+  "sampleDate": "2026-10-29",
+  "sampleTime": "16:00",
+  "parts": [
+    {
+      "name": "tea_session_reminder_full_en_v6",
+      "status": "accepted",
+      "messageId": "wamid.HBgKNjU4MjA2NDkwMBUCABEYFENFM0FCNTVCQ0VGMkQyNzhBQ0Q4AA=="
+    },
+    {
+      "name": "tea_session_reminder_full_zh_v6",
+      "status": "accepted",
+      "messageId": "wamid.HBgKNjU4MjA2NDkwMBUCABEYFENFMDdGRkQ2MUIzM0MzRTBBNjdCAA=="
+    },
+    {
+      "name": "tea_session_directions_v2",
+      "status": "accepted",
+      "messageId": "wamid.HBgKNjU4MjA2NDkwMBUCABEYFENFRDI5OTA4MDAyRjZCN0NENkUwAA=="
+    }
+  ]
+}

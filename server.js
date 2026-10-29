@@ -449,8 +449,7 @@ async function sendMainMenu(to) {
                                     },
                                     {
                                         id: "CANCELLATION_POLICY",
-                                        title: isChinese ? "📜 取消与退款政策" : "📜 Cancellation & Refund",
-                                        description: isChinese ? "改期、取消及退款安排" : "Cancellation & Refund Policy"
+                                        title: isChinese ? "📜 取消与退款政策" : "📜 Cancellation & Refund"
                                     },
                                     {
                                         id: "CONTACT",
@@ -497,7 +496,7 @@ async function sendFAQDocument(to) {
         to,
         isChinese
             ? "常见问题已在上方文件中解答，请下载并查看。如有文件以外的其他问题，请直接提问，工作人员会尽快回复您。\n\n我们的工作时间为新加坡时间中午12.00至下午17.30。"
-            : "Frequently asked questions are answered in this file above, kindly download and view. For any questions outside of this document, please ask and we will reply as soon as possible.\n\nOur working hours are 12.00pm to 17.30pm Singapore Time."
+            : "Frequently asked questions are answered in this file above, kindly download and view. For any questions outside of this document, please ask and we will reply as soon as possible.\n\nOur working hours are Monday to Thursday, 12.00pm to 17.00pm Singapore Time."
     );
 }
 
@@ -1064,7 +1063,7 @@ async function handleBookingConfirm(from) {
 async function sendConfirmedBookingToStaff(customerPhone, booking, route) {
     const packageTypes = {
         weekday: "Weekday", weekend: "Weekend", exclusive: "Exclusive", premium: "Premium", unlimited: "Unlimited",
-        first_public: "None — $68 promotional public session for first trial", no_package: "None"
+        first_public: "None — $68 promotional public session for the first trial", no_package: "None"
     };
     await sendMessage(process.env.STAFF_PHONE_NUMBER,
         `Booking confirmed\n\nCustomer: +${customerPhone}\n` +
