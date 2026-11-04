@@ -13,9 +13,9 @@ test("blocks gazetted holidays and substitute Mondays, and closes unverified yea
     assert.equal(config.isBookableDate("2027-02-09"), true);
 });
 
-test("confirmation hours include the entire 90-minute Singapore session", () => {
-    assert.equal(config.formatSessionHours("14:00:00"), "2:00 PM - 3:30 PM (Singapore time)");
-    assert.equal(config.formatSessionHours("16:00", true), "16:00 - 17:30 (新加坡时间)");
+test("confirmation hours include the entire 75-minute Singapore session", () => {
+    assert.equal(config.formatSessionHours("14:00:00"), "2:00 PM - 3:15 PM (Singapore time)");
+    assert.equal(config.formatSessionHours("16:00", true), "16:00 - 17:15 (新加坡时间)");
 });
 
 function calendarFixture(events = [], insertError) {
@@ -39,12 +39,12 @@ function calendarFixture(events = [], insertError) {
     return { ...context.module.exports, writes };
 }
 
-test("calendar offers only the 4 PM 90-minute session", async () => {
+test("calendar offers all three 75-minute session", async () => {
     const slots = await calendarFixture().getAvailableSlots("2026-10-02");
     assert.deepEqual(Array.from(slots, s => s.start.toISOString()), [
-        "2026-10-02T08:00:00.000Z"
+        "2026-10-02T04:00:00.000Z", "2026-10-02T06:00:00.000Z", "2026-10-02T08:00:00.000Z"
     ]);
-    for (const slot of slots) assert.equal(slot.end - slot.start, 90 * 60_000);
+    for (const slot of slots) assert.equal(slot.end - slot.start, 75 * 60_000);
 });
 
 test("conflicts in the final 30 minutes block a session; touching the end does not", async () => {
@@ -53,22 +53,22 @@ test("conflicts in the final 30 minutes block a session; touching the end does n
         end: { dateTime: "2026-10-02T14:00:00+08:00" }
     }]);
     const args = { bookingDate: "2026-10-02", bookingTime: "12:00" };
-    assert.equal(await make("13:15").hasExternalCalendarConflict(args), true);
-    assert.equal(await make("13:30").hasExternalCalendarConflict(args), false);
+    assert.equal(await make("13:00").hasExternalCalendarConflict(args), true);
+    assert.equal(await make("13:15").hasExternalCalendarConflict(args), false);
 });
 
-test("new calendar event ends at 5:30 PM and reused event gets the new duration", async () => {
+test("new calendar event ends at 5:15 PM and reused event gets the new duration", async () => {
     const args = { sessionId: "11111111-1111-1111-1111-111111111111",
         bookingDate: "2026-10-02", bookingTime: "16:00" };
     const fresh = calendarFixture();
     await fresh.createSessionEvent(args);
-    assert.equal(fresh.writes[0].end.dateTime, "2026-10-02T09:30:00.000Z");
+    assert.equal(fresh.writes[0].end.dateTime, "2026-10-02T09:15:00.000Z");
     const existing = calendarFixture([{
         end: { dateTime: "2026-10-02T09:00:00Z" },
         extendedProperties: { private: { bookingSessionId: args.sessionId } }
     }], { code: 409 });
     await existing.createSessionEvent(args);
-    assert.equal(existing.writes[0].end.dateTime, "2026-10-02T09:30:00.000Z");
+    assert.equal(existing.writes[0].end.dateTime, "2026-10-02T09:15:00.000Z");
 });
 
 test("customer menu uses the same schedule, full ranges, and valid row lengths", async () => {
@@ -84,9 +84,9 @@ test("customer menu uses the same schedule, full ranges, and valid row lengths",
     vm.runInContext(source.slice(start, end), context);
     await context.sendAvailableTimes("customer", "2026-10-02");
     const rows = payloads[0].interactive.action.sections[0].rows;
-    assert.deepEqual(Array.from(rows, r => r.id), ["BOOK_TIME_16:00"]);
+    assert.deepEqual(Array.from(rows, r => r.id), ["BOOK_TIME_12:00", "BOOK_TIME_14:00", "BOOK_TIME_16:00"]);
     assert.deepEqual(Array.from(rows, r => r.title), [
-        "4:00 PM - 5:30 PM"
+        "12:00 PM - 1:15 PM", "2:00 PM - 3:15 PM", "4:00 PM - 5:15 PM"
     ]);
     context.getLanguage = () => "zh";
     await context.sendAvailableTimes("customer", "2026-10-02");
@@ -109,7 +109,7 @@ test("booking persistence rejects old 1 PM and 3 PM options", async () => {
     draft.booking_route = "no_package"; draft.journey_step = "dates";
     await db.saveDraft(draft);
     await db.saveBookingDate("customer", "2026-10-02");
-    for (const time of ["12:00", "13:00", "14:00", "15:00", "17:00"]) {
+    for (const time of ["13:00", "15:00", "17:00"]) {
         await assert.rejects(db.saveBookingTime("customer", time), /Invalid booking session time/);
     }
     for (const time of config.startTimes) await db.saveBookingTime("customer", time);

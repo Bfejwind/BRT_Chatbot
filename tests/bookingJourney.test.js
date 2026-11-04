@@ -65,7 +65,7 @@ test("exclusive and premium remain distinct and only owned categories appear", a
     }
 });
 
-test("Unlimited is selectable only by holders, every day at 4–5:30 PM", async () => {
+test("Unlimited is selectable only by holders, every day at all three session times", async () => {
     for (const chinese of [false, true]) {
         const f = fixture({ allowed_routes: ['unlimited'] }, chinese);
         await f.journey.begin('customer');
@@ -87,17 +87,17 @@ test("Unlimited is selectable only by holders, every day at 4–5:30 PM", async 
     for (let day = 5; day <= 11; day++) {
         assert.equal(schedule.isRouteDateAllowed(`2026-10-${String(day).padStart(2,'0')}`, 'unlimited'), true);
     }
-    assert.deepEqual(schedule.startTimes, ['16:00']);
-    assert.equal(schedule.durationMinutes, 90);
+    assert.deepEqual(schedule.startTimes, ['12:00', '14:00', '16:00']);
+    assert.equal(schedule.durationMinutes, 75);
 });
-test("first-time public visitors use Monday–Thursday, 4–5:30 PM", async () => {
+test("first-time public visitors use weekdays and weekends at all three session times", async () => {
     const f = fixture(); await f.journey.begin("customer");
     await f.journey.select("customer", "FIRST");
     await f.journey.select("customer", "PUBLIC");
     assert.deepEqual(f.dates, ["first_public"]);
     assert.equal(schedule.isRouteDateAllowed("2026-10-08", "first_public"), true);
-    assert.equal(schedule.isRouteDateAllowed("2026-10-09", "first_public"), false);
-    assert.deepEqual(schedule.startTimes, ["16:00"]);
+    assert.equal(schedule.isRouteDateAllowed("2026-10-09", "first_public"), true);
+    assert.deepEqual(schedule.startTimes, ["12:00", "14:00", "16:00"]);
 });
 test("package category buttons and selections enforce verified entitlements", async () => {
     const f = fixture({ allowed_routes: ["weekend"] });
@@ -149,5 +149,16 @@ test("expired journey selection offers a working restart button", async () => {
         await f.journey.select("customer", "RESTART");
         assert.equal(f.draft().journey_step, "first");
         assert.equal(f.menus.at(-1)[0].id, "JOURNEY_FIRST");
+    }
+});
+
+
+test("first trial pricing includes weekday and weekend usual prices in both languages", async () => {
+    for (const chinese of [false, true]) {
+        const f = fixture(null, chinese);
+        await f.journey.begin("customer");
+        await f.journey.select("customer", "FIRST");
+        const text = f.texts.at(-1);
+        for (const price of ["$68", "$128", "$88", "$148"]) assert.ok(text.includes(price));
     }
 });

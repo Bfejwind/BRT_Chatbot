@@ -12,6 +12,8 @@ const chinese=`尊敬的茶友：
 
 注意：为了让每位茶友都能享有最佳体验，茶荟开始后，我们可能无法安排迟到的茶友入场，敬请谅解。
 
+请提前20分钟抵达。
+
 温馨提醒：
 ●请穿宽松舒适、适合静坐的上衣和长裤。茶荟时间请穿袜子。
 ●请避免食用葱、姜、蒜、咖喱及其他辛辣食物，避免饮酒。活动前1小时请避免进食。
@@ -26,6 +28,7 @@ const english=[
     '{{3}} - {{4}}: Tea Session introduction; take your seat and wait quietly for the session to begin ',
     '{{5}}: Tea Session begins', '',
     'Please note: To give everyone the best experience, we may not be able to admit late arrivals once the session has begun. Thank you for your understanding.', '',
+    'Please arrive 20 minutes early.', '',
     'Gentle reminders: ',
     '●Wear loose, comfortable tops and long pants suitable for sitting. Please wear socks for the session.', ' ',
     '●Avoid onion, ginger, garlic, curry, other spicy foods and alcohol. Please avoid eating for 1 hour before the session. ', '',

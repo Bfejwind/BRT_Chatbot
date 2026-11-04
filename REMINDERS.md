@@ -46,7 +46,7 @@ restore a deducted use, suppress reminders and queue calendar deletion. To chang
 a booking, cancel and re-enter it. Direct Google Calendar additions/edits are not
 imported; existing manually entered events must be reconciled before using the form.
 Overlapping public/private bookings already present in Supabase are rejected.
-Public chatbot bookings stay at 4 PM. Private bookings use their chosen time and
+Public chatbot bookings offer 12:00-13:15, 14:00-15:15 and 16:00-17:15 (Singapore time). Private bookings use their chosen time and
 the same previous-day reminder window; same-day bookings get no “tomorrow” message.
 The form does not send an immediate WhatsApp confirmation.
 
@@ -136,3 +136,5 @@ Chinese templates were submitted for approval; directions v2/address/PDF stay
 unchanged. Preview: templates/drafts/reminder-preview-v4.md. After approval and
 an authorized deployment, use BOOKING_REMINDER_FORMAT=full_v4. Existing v3
 checkpointed jobs retain v3. No live provider or production format was changed.
+
+November 3 update: English and Chinese reminder definitions recommend arriving 20 minutes early. Updated hosted WhatsApp templates require provider submission and approval before the new wording appears in live reminders.

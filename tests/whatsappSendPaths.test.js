@@ -26,7 +26,7 @@ test("confirmed bookings send staff the date, exact hours, package and party siz
         assert.ok(body.includes("Date: 2026-10-08"));
         assert.ok(body.includes(require("../bookingSchedule").formatSessionHours("16:00", false)));
         assert.ok(body.includes("Number of people: 3"));
-        assert.ok(body.includes(route === "first_public" ? "$68 promotional" : route[0].toUpperCase() + route.slice(1)));
+        assert.ok(body.includes(route === "first_public" ? "First trial public session" : route[0].toUpperCase() + route.slice(1)));
     }
 });
 test("customer follow-ups during staff handover are forwarded without automated replies", async () => {

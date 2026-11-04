@@ -13,7 +13,7 @@ Authentic Tea Essence Museum•Guanyiyangxing Tea Space is truly looking forward
 To give every participant the best experience, we kindly ask that you arrive by {{6}}.
 Unfortunately, we may not be able to admit late arrivals once the session is underway.
 
-Gentle reminder:
+Please arrive 20 minutes early.\n\nGentle reminder:
 ●Wear socks and loose, comfortable clothing for sitting.
 ●Avoid onion, ginger, garlic, curry, and other spicy foods.
 ●Refrain from using heavy perfumes.
@@ -31,6 +31,8 @@ const chinese = `尊敬的来宾：
 
 为了让每位来宾都能享有最佳体验，敬请您于{{6}}前抵达。
 活动开始后，我们可能无法安排迟到的来宾入场，敬请谅解。
+
+请提前20分钟抵达。
 
 温馨提醒：
 ●请穿袜子及宽松舒适、适合静坐的衣物。

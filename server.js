@@ -1063,7 +1063,7 @@ async function handleBookingConfirm(from) {
 async function sendConfirmedBookingToStaff(customerPhone, booking, route) {
     const packageTypes = {
         weekday: "Weekday", weekend: "Weekend", exclusive: "Exclusive", premium: "Premium", unlimited: "Unlimited",
-        first_public: "None — $68 promotional public session for the first trial", no_package: "None"
+        first_public: "None — First trial public session: weekdays (Mon-Thu) $68 (usual price $128); weekends (Fri-Sun) $88 (usual price $148)", no_package: "None"
     };
     await sendMessage(process.env.STAFF_PHONE_NUMBER,
         `Booking confirmed\n\nCustomer: +${customerPhone}\n` +
@@ -1426,12 +1426,12 @@ async function handleThingsToNote(from) {
     const message = isChinese
         ? `注意事项：
 
-请在茶道开始前约 5–10 分钟抵达，以便签到、使用洗手间并安顿下来，避免打扰仪式进行。
+请在茶道开始前20 分钟抵达，以便签到、使用洗手间并安顿下来，避免打扰仪式进行。
 
 茶道进行期间请勿使用手机。进入茶道区域前，我们会请宾客将手机放入篮子中，以维护茶道所营造的宁静氛围。`
         : `Things to note:
 
-Arrive about 5-10 mins before the session to check in, use the restroom and settle in without interrupting the ceremony.
+Arrive 20 minutes before the session to check in, use the restroom and settle in without interrupting the ceremony.
 
 No phones during the session, guests will be asked to place their phones in a basket before entering the tea area, this is to preserve the calm energy that the ceremony creates.`;
 

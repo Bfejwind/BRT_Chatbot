@@ -11,7 +11,7 @@ function isBookableDate(date) {
 }
 function formatSessionHours(time, isChinese = false) {
     const start = new Date(`2000-01-01T${String(time).slice(0, 5)}:00+08:00`);
-    const end = new Date(start.getTime() + 90 * 60_000);
+    const end = new Date(start.getTime() + 75 * 60_000);
     const format = date => date.toLocaleTimeString(isChinese ? "zh-CN" : "en-US", {
         timeZone: "Asia/Singapore", hour: "numeric", minute: "2-digit", hour12: !isChinese
     });
@@ -21,7 +21,8 @@ function isRouteDateAllowed(date, route) {
     if (!isBookableDate(date)) return false;
     const day = new Date(`${date}T00:00:00+08:00`)
         .toLocaleDateString("en-US", { timeZone: "Asia/Singapore", weekday: "short" });
-    if (route === "first_public" || route === "weekday") return ["Mon", "Tue", "Wed", "Thu"].includes(day);
+    if (route === "first_public") return true;
+    if (route === "weekday") return ["Mon", "Tue", "Wed", "Thu"].includes(day);
     if (route === "weekend") return ["Fri", "Sat", "Sun"].includes(day);
     return route === "exclusive" || route === "premium" || route === "unlimited" || route === "no_package";
 }
@@ -29,6 +30,6 @@ module.exports = Object.freeze({
     isRouteDateAllowed,
     isBookableDate,
     formatSessionHours,
-    startTimes: Object.freeze(["16:00"]),
-    durationMinutes: 90
+    startTimes: Object.freeze(["12:00", "14:00", "16:00"]),
+    durationMinutes: 75
 });

@@ -39,3 +39,13 @@ test('multipart reminders retain v3 after a configuration change between retries
     assert.deepEqual(outcomes,['failed','accepted']);
     assert.deepEqual(sends,['tea_session_reminder_full_en_v3','tea_session_reminder_full_zh_v3','tea_session_reminder_full_zh_v3','tea_session_directions_v2']);
 });
+
+
+test('every full reminder format recommends arriving 20 minutes early in both languages', () => {
+    const {getDefinitions} = require('../reminderTemplates');
+    for (const format of ['full_v2', 'full_v3', 'full_v4', 'full_v5', 'full_v6']) {
+        const defs = getDefinitions(format);
+        assert.ok(defs[0].components[0].text.includes('20 minutes early'), format);
+        assert.ok(defs[1].components[0].text.includes('20'), format);
+    }
+});

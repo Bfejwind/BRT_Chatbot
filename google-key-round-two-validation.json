@@ -1,0 +1,18 @@
+{
+  "checkedAt": "2026-10-29T07:29:32.513Z",
+  "freshKey": true,
+  "sameAccount": true,
+  "productionCalendarRead": true,
+  "stagingCalendarRead": true,
+  "localProductionUpdated": true,
+  "localStagingUpdated": true,
+  "hostedUpdatePending": false,
+  "oldKeyRevoked": false,
+  "productionDeployment": "dep-dbhfmiuc6qcc73fa6s20",
+  "stagingDeployment": "dep-dbhfnqh42hec73cbld60",
+  "productionDeploymentLive": true,
+  "stagingDeploymentLive": true,
+  "hostSmokeChecksPassed": true,
+  "ownerCalendarConfirmationPending": false,
+  "ownerProductionCalendarConfirmed": true
+}
