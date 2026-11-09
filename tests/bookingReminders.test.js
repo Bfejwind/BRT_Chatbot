@@ -39,10 +39,10 @@ test("template uses the booker's phone and dynamic times in both languages", () 
     assert.equal(payload.type, "template");
     assert.equal(payload.template.name, definition.name);
     assert.deepEqual(payload.template.components[0].parameters.map(p => p.text),
-        ["4:00 PM", "4:15 PM", "4:15 PM", "4:00 PM", "4:15 PM", "4:15 PM"]);
+        ["4:00pm", "4:15pm", "4:15pm", "4:00pm", "4:15pm", "4:15pm"]);
     const earlier = reminderPayload({ ...booking, booking_time: "12:00:00" }, config);
-    assert.equal(earlier.template.components[0].parameters[0].text, "12:00 PM");
-    assert.equal(earlier.template.components[0].parameters[1].text, "12:15 PM");
+    assert.equal(earlier.template.components[0].parameters[0].text, "12:00pm");
+    assert.equal(earlier.template.components[0].parameters[1].text, "12:15pm");
     const body = definition.components[0].text;
     assert.ok(body.includes("您好"));
     assert.ok(!body.includes("Jannalyn"));

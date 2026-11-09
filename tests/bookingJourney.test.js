@@ -31,20 +31,18 @@ test("private pricing explanation accompanies the button in both languages", asy
         assert.match(f.texts.at(-1), chinese ? /会员配套不适用/ : /membership packages do not apply/);
     }
 });
-test("private buttons recover missing drafts without restarting booking questions", async () => {
+test("expired private buttons return to the first booking question", async () => {
     for (const chinese of [false, true]) {
         for (const choice of ["PRIVATE", "NO_BUY"]) {
             const f = fixture(null, chinese);
             await f.journey.select("customer", choice);
-            assert.equal(f.menus.length, 0);
-            assert.equal(f.dates.length, 0);
-            assert.equal(f.staff.length, 1);
-            assert.match(f.staff[0][1], /private tea session/);
-            assert.equal(f.draft().journey_step, "staff");
-            assert.match(f.messages.at(-1), chinese ? /协助安排您的私人场次/ : /help arrange your private session/);
+            assert.equal(f.staff.length, 0);
+            assert.equal(f.draft().journey_step, "first");
+            assert.equal(f.menus.at(-1)[0].id, "JOURNEY_FIRST");
         }
     }
 });
+
 test("private button from the purchase step also hands off to staff", async () => {
     const f = fixture();
     await f.journey.begin("customer");
@@ -65,7 +63,7 @@ test("exclusive and premium remain distinct and only owned categories appear", a
     }
 });
 
-test("Unlimited is selectable only by holders, every day at 4–5:30 PM", async () => {
+test("Unlimited is selectable only by holders, every day at all three session times", async () => {
     for (const chinese of [false, true]) {
         const f = fixture({ allowed_routes: ['unlimited'] }, chinese);
         await f.journey.begin('customer');
@@ -87,17 +85,17 @@ test("Unlimited is selectable only by holders, every day at 4–5:30 PM", async 
     for (let day = 5; day <= 11; day++) {
         assert.equal(schedule.isRouteDateAllowed(`2026-10-${String(day).padStart(2,'0')}`, 'unlimited'), true);
     }
-    assert.deepEqual(schedule.startTimes, ['16:00']);
+    assert.deepEqual(schedule.startTimes, ['12:00', '14:00', '16:00']);
     assert.equal(schedule.durationMinutes, 90);
 });
-test("first-time public visitors use Monday–Thursday, 4–5:30 PM", async () => {
+test("first-time public visitors use weekdays at all three session times", async () => {
     const f = fixture(); await f.journey.begin("customer");
     await f.journey.select("customer", "FIRST");
     await f.journey.select("customer", "PUBLIC");
     assert.deepEqual(f.dates, ["first_public"]);
     assert.equal(schedule.isRouteDateAllowed("2026-10-08", "first_public"), true);
     assert.equal(schedule.isRouteDateAllowed("2026-10-09", "first_public"), false);
-    assert.deepEqual(schedule.startTimes, ["16:00"]);
+    assert.deepEqual(schedule.startTimes, ["12:00", "14:00", "16:00"]);
 });
 test("package category buttons and selections enforce verified entitlements", async () => {
     const f = fixture({ allowed_routes: ["weekend"] });
@@ -105,6 +103,10 @@ test("package category buttons and selections enforce verified entitlements", as
     await f.journey.select("customer", "HAS_PACKAGE"); await f.journey.select("customer", "PUBLIC");
     assert.deepEqual(f.menus.at(-1).map(row => row.id), ["JOURNEY_WEEKEND"]);
     await f.journey.select("customer", "PREMIUM"); assert.equal(f.dates.length, 0);
+    assert.equal(f.draft().journey_step, "first");
+    await f.journey.select("customer", "RETURNING");
+    await f.journey.select("customer", "HAS_PACKAGE");
+    await f.journey.select("customer", "PUBLIC");
     await f.journey.select("customer", "WEEKEND"); assert.deepEqual(f.dates, ["weekend"]);
     assert.equal(schedule.isRouteDateAllowed("2026-10-09", "weekend"), true);
     assert.equal(schedule.isRouteDateAllowed("2026-10-08", "weekend"), false);
@@ -123,8 +125,8 @@ test("declining package purchase sends a private request to staff in both langua
             assert.equal(f.staff.length, 1);
             assert.match(f.staff[0][1], /private tea session/);
             assert.equal(f.messages.at(-1), chinese
-                ? "感谢您的关注，工作人员会尽快回复您，协助安排您的私人场次。"
-                : "Thank you for your interest, a Staff member will reply as soon as possible to help arrange your private session");
+                ? "感谢您的关注，工作人员会尽快回复您，协助安排您的私人场次。\n\n我们的工作时间为新加坡时间12:00pm至5:30pm。"
+                : "Thank you for your interest, a Staff member will reply as soon as possible to help arrange your private session.\n\nOur working hours are 12:00pm to 5:30pm Singapore Time.");
             await f.journey.select("customer", "NO_BUY");
             assert.equal(f.staff.length, 1);
         }
@@ -137,4 +139,32 @@ test("private requests and package purchases go to staff without opening booking
     await f.journey.begin("customer"); await f.journey.select("customer", "RETURNING");
     await f.journey.select("customer", "NO_PACKAGE"); await f.journey.select("customer", "BUY");
     assert.equal(f.staff.length, 2); assert.equal(f.dates.length, 0);
+});
+
+
+test("expired journey selection immediately restarts booking", async () => {
+    for (const chinese of [false, true]) {
+        const f = fixture(null, chinese);
+        await f.journey.begin("customer");
+        await f.journey.select("customer", "PUBLIC");
+        assert.equal(f.menus.at(-1)[0].id, "JOURNEY_FIRST");
+        await f.journey.select("customer", "RESTART");
+        assert.equal(f.draft().journey_step, "first");
+        assert.equal(f.menus.at(-1)[0].id, "JOURNEY_FIRST");
+    }
+});
+
+
+test("first trial pricing includes weekday and weekend usual prices in both languages", async () => {
+    for (const chinese of [false, true]) {
+        const f = fixture(null, chinese);
+        await f.journey.begin("customer");
+        await f.journey.select("customer", "FIRST");
+        const text = f.texts.at(-1);
+        for (const price of ["$68"]) assert.ok(text.includes(price));
+        if (!chinese) {
+            assert.ok(text.indexOf('For First time visitors, you may enjoy a discounted promotion price.') < text.indexOf('Promotion $68 Public session'));
+            assert.equal(f.menus.at(-1)[0].title, 'Promo $68 Public');
+        }
+    }
 });

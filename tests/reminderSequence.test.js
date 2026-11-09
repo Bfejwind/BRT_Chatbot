@@ -7,7 +7,7 @@ test('full reminder preserves the requested content and shifts all private booki
     for(const d of definitions){const body=d.components.find(c=>c.type==='BODY');assert.ok(body.text.length<=1024);}
     const sequence=reminderSequence(booking);
     assert.equal(sequence.length,3);
-    assert.deepEqual(sequence[0].template.components[0].parameters.map(p=>p.text),['10:30 AM','10:45 AM','10:45 AM','11:00 AM','11:00 AM','11:00 AM','morning']);
+    assert.deepEqual(sequence[0].template.components[0].parameters.map(p=>p.text),['10:30am','10:45am','10:45am','11:00am','11:00am','11:00am','morning']);
     assert.ok(sequence[1].template.components[0].parameters[0].text.includes('10:30'));
     assert.equal(sequence[1].template.components[0].parameters[6].text,'上午');
     assert.equal(sequence[2].template.components[0].parameters[0].document.link,DIRECTIONS_PDF);

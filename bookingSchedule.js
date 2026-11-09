@@ -9,19 +9,23 @@ function isBookableDate(date) {
     return /^\d{4}-\d{2}-\d{2}$/.test(date) && Boolean(holidays[year]) &&
         !holidays[year].includes(date.slice(5));
 }
+function formatTime(date) {
+    return date.toLocaleTimeString("en-US", {
+        timeZone: "Asia/Singapore", hour: "numeric", minute: "2-digit", hour12: true
+    }).toLowerCase().replace(/\s/g, "");
+}
 function formatSessionHours(time, isChinese = false) {
     const start = new Date(`2000-01-01T${String(time).slice(0, 5)}:00+08:00`);
     const end = new Date(start.getTime() + 90 * 60_000);
-    const format = date => date.toLocaleTimeString(isChinese ? "zh-CN" : "en-US", {
-        timeZone: "Asia/Singapore", hour: "numeric", minute: "2-digit", hour12: !isChinese
-    });
+    const format = formatTime;
     return `${format(start)} - ${format(end)} (${isChinese ? "新加坡时间" : "Singapore time"})`;
 }
 function isRouteDateAllowed(date, route) {
     if (!isBookableDate(date)) return false;
     const day = new Date(`${date}T00:00:00+08:00`)
         .toLocaleDateString("en-US", { timeZone: "Asia/Singapore", weekday: "short" });
-    if (route === "first_public" || route === "weekday") return ["Mon", "Tue", "Wed", "Thu"].includes(day);
+    if (route === "first_public") return ["Mon", "Tue", "Wed", "Thu"].includes(day);
+    if (route === "weekday") return ["Mon", "Tue", "Wed", "Thu"].includes(day);
     if (route === "weekend") return ["Fri", "Sat", "Sun"].includes(day);
     return route === "exclusive" || route === "premium" || route === "unlimited" || route === "no_package";
 }
@@ -29,6 +33,7 @@ module.exports = Object.freeze({
     isRouteDateAllowed,
     isBookableDate,
     formatSessionHours,
-    startTimes: Object.freeze(["16:00"]),
+    formatTime,
+    startTimes: Object.freeze(["12:00", "14:00", "16:00"]),
     durationMinutes: 90
 });
