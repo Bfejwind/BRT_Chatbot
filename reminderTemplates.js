@@ -71,9 +71,9 @@ function reminderSequence(booking,format='full_v2') {
         messaging_product:'whatsapp',to:booking.customer_phone,type:'template',
         template:{name:definition.name,language:{code:definition.language},components:i===2
             ? [{type:'header',parameters:[{type:'document',document:{link:DIRECTIONS_PDF,filename:'Directions.pdf'}}]}]
-            : [{type:'body',parameters:[...dates.map(date=>date.toLocaleTimeString(i===0?'en-US':'zh-CN',{
+            : [{type:'body',parameters:[...dates.map(date=>date.toLocaleTimeString('en-US',{
                 timeZone:'Asia/Singapore',hour:'numeric',minute:'2-digit',hour12:true
-            })),periods[i][period]].map(text=>({type:'text',text}))}]
+            }).toLowerCase().replace(/\s/g,'')),periods[i][period]].map(text=>({type:'text',text}))}]
         }
     }));
 }

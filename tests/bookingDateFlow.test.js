@@ -84,7 +84,7 @@ test("rejects malformed responses, dates outside the window, and replaced calend
 function handlerFixture(f) {
     const source = fs.readFileSync(path.join(__dirname, "../server.js"), "utf8");
     const selected = [], messages = [];
-    let reopened = 0;
+    let reopened = 0, restarted = 0;
     const context = {
         getDraft: async () => f.draft,
         saveDraft: async draft => { f.draft = draft; },
@@ -93,13 +93,13 @@ function handlerFixture(f) {
         readDateFlowReply: (reply, draft, available) => readDateFlowReply(reply, draft, available, 2000),
         handleBookingDate: async (...args) => selected.push(args),
         sendMessage: async (...args) => messages.push(args),
-        offerBookingRestart: async () => {},
+        offerBookingRestart: async () => { restarted++; },
         sendAvailableDates: async () => { reopened++; }
     };
     vm.createContext(context);
     vm.runInContext(source.slice(source.indexOf("async function handleInteractiveMessage("),
         source.indexOf("function requireValid360DialogSecret(")), context);
-    return { context, selected, messages, reopened: () => reopened };
+    return { context, selected, messages, reopened: () => reopened, restarted: () => restarted };
 }
 
 test("Flow completion continues the existing booking and consumes the calendar token", async () => {
@@ -112,12 +112,13 @@ test("Flow completion continues the existing booking and consumes the calendar t
     assert.equal(h.reopened(), 0);
 });
 
-test("invalid completion prompts a fresh calendar without modifying the booking", async () => {
+test("invalid completion restarts booking without reopening the expired calendar", async () => {
     const f = fixture(), h = handlerFixture(f);
     await h.context.handleInteractiveMessage("customer", { interactive: {
         type: "nfm_reply", nfm_reply: { response_json: "broken" }
     } });
     assert.equal(h.selected.length, 0);
     assert.equal(h.messages.length, 1);
-    assert.equal(h.reopened(), 1);
+    assert.equal(h.reopened(), 0);
+    assert.equal(h.restarted(), 1);
 });

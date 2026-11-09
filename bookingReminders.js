@@ -23,7 +23,7 @@ function reminderPayload(booking, config) {
     }
     const format = date => date.toLocaleTimeString("en-US", {
         timeZone: "Asia/Singapore", hour: "numeric", minute: "2-digit", hour12: true
-    });
+    }).toLowerCase().replace(/\s/g, "");
     const welcome = format(start);
     const intro = format(new Date(start.getTime() + 15 * 60 * 1000));
     return {

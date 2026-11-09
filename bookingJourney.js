@@ -15,10 +15,10 @@ function createBookingJourney({ getDraft, startBooking, checkPackage, sendButton
             ? "若您希望预约私人场次，温馨提醒您：首次体验优惠价不适用于私人预约。私人场次收费有所不同，需要由工作人员协助安排。我们很乐意为您介绍价格并安排到访。"
             : "若您希望预约私人场次，温馨提醒您：会员配套不适用于私人预约。私人场次收费有所不同，需要由工作人员协助安排。我们很乐意为您介绍价格并安排到访。";
         await ask(from, "Would you prefer a public or private session?\n\n" +
-            (draft.first_visit ? "First trial public session:\nWeekdays (Mon-Thu): $68 (usual price $128)\nWeekends (Fri-Sun): $88 (usual price $148)\n\n" : "") + privateEn,
+            (draft.first_visit ? "For First time visitors, you may enjoy a discounted promotion price.\n\nPromotion $68 Public session\nWeekdays (Mon-Thu): $68 (usual price $128)\nWeekends (Fri-Sun): $88 (usual price $148)\n\n" : "") + privateEn,
             "您希望参加公众场次还是私人场次？\n\n" +
-            (draft.first_visit ? "首次体验公众场次：\n平日（周一至周四）：$68（原价$128）\n周末（周五至周日）：$88（原价$148）\n\n" : "") + privateZh, [
-                ["PUBLIC", draft.first_visit ? "First trial public" : "Public session", draft.first_visit ? "首次体验公众场次" : "公众场次"], ["PRIVATE", "Private session", "私人场次"]
+            (draft.first_visit ? "首次到访的茶友可享优惠体验价。\n\n首次体验公众场次：\n平日（周一至周四）：$68（原价$128）\n周末（周五至周日）：$88（原价$148）\n\n" : "") + privateZh, [
+                ["PUBLIC", draft.first_visit ? "Promo $68 Public" : "Public session", draft.first_visit ? "首次体验公众场次" : "公众场次"], ["PRIVATE", "Private session", "私人场次"]
             ]);
     }
     async function purchase(from) {
@@ -28,12 +28,6 @@ function createBookingJourney({ getDraft, startBooking, checkPackage, sendButton
     }
     async function select(from, choice) {
         let draft = await getDraft(from);
-        // These buttons request staff assistance, rather than reserving a slot.
-        // Recover a lost draft without restarting the first-visit questions.
-        if (!draft && ["PRIVATE", "NO_BUY"].includes(choice)) {
-            draft = await startBooking(from);
-            draft.journey_step = choice === "NO_BUY" ? "purchase" : "type";
-        }
         if (choice === "RESTART") return begin(from);
         if (!draft) return begin(from);
         if (choice === "FIRST" && draft.journey_step === "first") {
@@ -76,7 +70,7 @@ function createBookingJourney({ getDraft, startBooking, checkPackage, sendButton
             await notifyStaff(from, "Customer requests a private tea session.");
             draft.journey_step = "staff";
             await saveDraft(draft);
-            return sendMessage(from, isChinese(from) ? "感谢您的关注，工作人员会尽快回复您，协助安排您的私人场次。\n\n我们的工作时间为新加坡时间中午12.00至下午17.30。" : "Thank you for your interest, a Staff member will reply as soon as possible to help arrange your private session.\n\nOur working hours are 12.00pm to 17.30pm Singapore Time.");
+            return sendMessage(from, isChinese(from) ? "感谢您的关注，工作人员会尽快回复您，协助安排您的私人场次。\n\n我们的工作时间为新加坡时间12:00pm至5:30pm。" : "Thank you for your interest, a Staff member will reply as soon as possible to help arrange your private session.\n\nOur working hours are 12:00pm to 5:30pm Singapore Time.");
         }
         if (choice === "PUBLIC" && draft.journey_step === "type") {
             if (draft.first_visit) {
@@ -87,8 +81,8 @@ function createBookingJourney({ getDraft, startBooking, checkPackage, sendButton
             if (draft.package_verified) {
                 draft.journey_step = "category";
                 await saveDraft(draft);
-                return ask(from, "Choose your public session category. All sessions are 4:00–5:30 PM.",
-                    "请选择公众场次类别。所有场次均为16:00–17:30。", [
+                return ask(from, "Choose your public session category. Session times: 12:00pm to 1:30pm, 2:00pm to 3:30pm, 4:00pm to 5:30pm.",
+                    "请选择公众场次类别。场次时间：12:00pm to 1:30pm、2:00pm to 3:30pm、4:00pm to 5:30pm。", [
                         ["WEEKDAY", "Weekday (Mon–Thu)", "平日（周一至周四）"],
                         ["WEEKEND", "Weekend (Fri–Sun)", "周末（周五至周日）"],
                         ["EXCLUSIVE", "Exclusive", "专享"],
@@ -116,10 +110,10 @@ function createBookingJourney({ getDraft, startBooking, checkPackage, sendButton
             draft.journey_step = "staff";
             await saveDraft(draft);
             return sendMessage(from, isChinese(from)
-                ? "感谢您的关注，工作人员会尽快回复您，协助安排您的私人场次。\n\n我们的工作时间为新加坡时间中午12.00至下午17.30。"
-                : "Thank you for your interest, a Staff member will reply as soon as possible to help arrange your private session.\n\nOur working hours are 12.00pm to 17.30pm Singapore Time.");
+                ? "感谢您的关注，工作人员会尽快回复您，协助安排您的私人场次。\n\n我们的工作时间为新加坡时间12:00pm至5:30pm。"
+                : "Thank you for your interest, a Staff member will reply as soon as possible to help arrange your private session.\n\nOur working hours are 12:00pm to 5:30pm Singapore Time.");
         }
-        return ask(from, "That option has expired. Please restart your booking below.", "此选项已失效，请点击下方重新预约。", [["RESTART", "Restart booking", "重新预约"]]);
+        return begin(from);
     }
     async function begin(from) {
         const draft = await startBooking(from);

@@ -97,8 +97,8 @@ test("FAQs send Supabase links and matching filenames in both languages", async 
         });
         await run('customer');
         const doc=sends[0][1].document;
-        assert.equal(doc.filename,language==='zh'?'FAQChinese.pdf':'FAQ.pdf');
-        assert.equal(doc.link,'https://example.test/'+doc.filename);
+        assert.equal(doc.filename,language==='zh'?'Chinese 观颐养性静心养生茶荟  Complete Bilingual Q&A.pdf':'English 观颐养性静心养生茶荟  Complete Bilingual Q&A.pdf');
+        assert.equal(doc.link,'https://example.test/'+(language==='zh'?'FAQChinese.pdf':'FAQ.pdf'));
         assert.equal(doc.id,undefined);
     }
 });
@@ -114,6 +114,35 @@ test("Things to Note sends notes, introduction video, then the menu",async()=>{
         getLanguage:()=> 'en',sendMessage:async()=>order.push('notes'),
         sendIntroductionVideo:async()=>order.push('video'),sleep:async()=>{},sendMainMenu:async()=>order.push('menu')
     });await run('customer');assert.deepEqual(order,['notes','video','menu']);
+});
+test("Chinese Things to Note uses tea gathering wording and 10 - 20 minute arrival", async () => {
+    let notes;
+    await handler('handleThingsToNote', {
+        getLanguage: () => 'zh', sendMessage: async (_, text) => { notes = text; },
+        sendIntroductionVideo: async () => {}, sleep: async () => {}, sendMainMenu: async () => {}
+    })('customer');
+    assert.ok(notes.includes('茶荟'));
+    assert.ok(!notes.includes('茶会'));
+    assert.ok(notes.includes('10 - 20分钟'));
+});
+
+test("expired date, time and party-size menus restart instead of saving a selection", async () => {
+    for (const [name, selection] of [
+        ['handleBookingDate', 'BOOK_DATE_2026-11-01'],
+        ['handleBookingTime', 'BOOK_TIME_16:00'],
+        ['handleBookingPartySize', 'BOOK_SIZE_2']
+    ]) {
+        for (const draft of [null, { booking_date: '2026-11-01', booking_time: '16:00', journey_step: 'dates' }]) {
+            let restarts = 0;
+            await handler(name, {
+                getLanguage: () => 'en', getDraft: async () => draft,
+                getBookingDates: () => ['2026-11-12'], sendMessage: async () => {},
+                offerBookingRestart: async () => { restarts++; },
+                getBookableSlots: async () => assert.fail('Expired draft must not continue')
+            })('customer', selection);
+            assert.equal(restarts, 1, name);
+        }
+    }
 });
 test("introduction video includes bilingual captions and propagates delivery failure",async()=>{
     for(const language of ['en','zh']) {
@@ -192,12 +221,12 @@ test("policy menu precedes Contact and restart points to the booking entry", asy
         assert.equal(rows.at(-2).id, "CANCELLATION_POLICY");
         assert.equal(rows.at(-1).id, "CONTACT");
         assert.ok(rows.every(row => row.title.length <= 24));
-        let options;
+        let restarted;
         await handler("offerBookingRestart", {
             getLanguage: () => language,
-            sendBookingJourneyButtons: async (_, text, buttons) => { options = buttons; }
+            handleBooking: async customer => { restarted = customer; }
         })("customer");
-        assert.equal(options[0].id, "BOOKING");
+        assert.equal(restarted, "customer");
     }
     let policy;
     await handler("handleCancellationPolicy", {

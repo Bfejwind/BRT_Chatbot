@@ -74,8 +74,8 @@ const images = {
 
     ceremonyPrices:
         "https://ixjmzksmazysazlyoxne.supabase.co/storage/v1/object/public/chatbot-images/CeremonyPrices.jpg",
-    faqEnglish: "https://ixjmzksmazysazlyoxne.supabase.co/storage/v1/object/public/chatbot-images/FAQ.pdf",
-    faqChinese: "https://ixjmzksmazysazlyoxne.supabase.co/storage/v1/object/public/chatbot-images/FAQChinese.pdf",
+    faqEnglish: "https://ixjmzksmazysazlyoxne.supabase.co/storage/v1/object/public/chatbot-images/FAQ.pdf?v=20261109",
+    faqChinese: "https://ixjmzksmazysazlyoxne.supabase.co/storage/v1/object/public/chatbot-images/FAQChinese.pdf?v=20261109",
     directionsPDF: "https://ixjmzksmazysazlyoxne.supabase.co/storage/v1/object/public/chatbot-images/Getting%20to%20the%20RROYCE%20Building.pdf.pdf",
     introductionVideo: "https://ixjmzksmazysazlyoxne.supabase.co/storage/v1/object/public/chatbot-images/IntroductionVideoWhatsApp.mp4",
 
@@ -392,7 +392,7 @@ async function sendMainMenu(to) {
             to,
             images.mainMenuBanner,
             isChinese
-                ? "欢迎光临！请问今天有什么可以协助您的？菜单选项正在加载，请稍等。"
+                ? "欢迎光临！请问今天有什么可以协助您？菜单选项正在加载，请稍等。"
                 : "Welcome! How can we help you today? Please wait while the menu options load."
         );
 
@@ -440,7 +440,7 @@ async function sendMainMenu(to) {
                                     {
                                         id: "BOOKING",
                                         title: isChinese
-                                            ? "📅 预约参观"
+                                            ? "📅 预约"
                                             : "📅 Book a Visit"
                                     },
                                     {
@@ -488,15 +488,15 @@ async function sendFAQDocument(to) {
         messaging_product: "whatsapp", to, type: "document",
         document: {
             link: isChinese ? images.faqChinese : images.faqEnglish,
-            filename: isChinese ? "FAQChinese.pdf" : "FAQ.pdf"
+            filename: isChinese ? "Chinese 观颐养性静心养生茶荟  Complete Bilingual Q&A.pdf" : "English 观颐养性静心养生茶荟  Complete Bilingual Q&A.pdf"
         }
     }, { headers: { "D360-API-KEY": process.env.WHATSAPP_API_KEY } });
 
     await sendMessage(
         to,
         isChinese
-            ? "常见问题已在上方文件中解答，请下载并查看。如有文件以外的其他问题，请直接提问，工作人员会尽快回复您。\n\n我们的工作时间为新加坡时间中午12.00至下午17.30。"
-            : "Frequently asked questions are answered in this file above, kindly download and view. For any questions outside of this document, please ask and we will reply as soon as possible.\n\nOur working hours are Monday to Thursday, 12.00pm to 17.00pm Singapore Time."
+            ? "常见问题已在上方文件中解答，请下载并查看。如有文件以外的其他问题，请直接提问，工作人员会尽快回复您。\n\n我们的工作时间为新加坡时间12:00pm至5:30pm。"
+            : "Frequently asked questions are answered in this file above, kindly download and view. For any questions outside of this document, please ask and we will reply as soon as possible.\n\nOur working hours are Monday to Thursday, 12:00pm to 5:00pm Singapore Time."
     );
 }
 
@@ -743,14 +743,7 @@ async function sendAvailableTimes(to, date) {
         }
 
         const rows = slots.map(slot => {
-            const formatTime = value => value.toLocaleTimeString(
-                isChinese ? "zh-CN" : "en-US",
-                {
-                    timeZone: "Asia/Singapore",
-                    hour: "numeric",
-                    minute: "2-digit"
-                }
-            );
+            const formatTime = BOOKING_CONFIG.formatTime;
 
             // Keep the internal time as 24-hour format
             const hour = slot.start.toLocaleTimeString(
@@ -765,7 +758,7 @@ async function sendAvailableTimes(to, date) {
 
             return {
                 id: `BOOK_TIME_${hour}`,
-                title: `${formatTime(slot.start)} - ${formatTime(slot.end)}`,
+                title: `${formatTime(slot.start)} to ${formatTime(slot.end)}`,
                 description: isChinese
                     ? `剩余 ${slot.remainingPlaces} 个名额`
                     : `${slot.remainingPlaces} places remaining`
@@ -1426,9 +1419,9 @@ async function handleThingsToNote(from) {
     const message = isChinese
         ? `注意事项：
 
-请在茶道开始前20 分钟抵达，以便签到、使用洗手间并安顿下来，避免打扰仪式进行。
+请在茶荟开始前10 - 20分钟抵达，以便签到、使用洗手间并安顿下来，避免打扰仪式进行。
 
-茶道进行期间请勿使用手机。进入茶道区域前，我们会请宾客将手机放入篮子中，以维护茶道所营造的宁静氛围。`
+茶荟进行期间请勿使用手机。进入茶荟场前，我们会请宾客统一将手机放入篮子中，以维护茶荟所营造的宁静氛围。`
         : `Things to note:
 
 Arrive 20 minutes before the session to check in, use the restroom and settle in without interrupting the ceremony.
@@ -1450,10 +1443,7 @@ async function handleCancellationPolicy(from) {
 }
 
 async function offerBookingRestart(from) {
-    const zh = getLanguage(from) === "zh";
-    await sendBookingJourneyButtons(from,
-        zh ? "此预约选项已失效。您可以从头重新选择预约。" : "This booking option has expired. You can restart the booking selection below.",
-        [{ id: "BOOKING", title: zh ? "重新预约" : "Restart booking" }]);
+    await handleBooking(from);
 }
 
 async function handleContact(from) {
@@ -1476,7 +1466,7 @@ async function handleBookingDate(from, selectionId) {
             from,
             isChinese ? "预约日期无效。" : "Invalid booking date."
         );
-        await sendAvailableDates(from);
+        await offerBookingRestart(from);
         return;
     }
 
@@ -1493,7 +1483,11 @@ async function handleBookingDate(from, selectionId) {
         return;
     }
 
-    if (draft.journey_step !== "dates" || !BOOKING_CONFIG.isRouteDateAllowed(date, draft.booking_route)) {
+    if (draft.journey_step !== "dates" || draft.reserved_booking_id) {
+        await offerBookingRestart(from);
+        return;
+    }
+    if (!BOOKING_CONFIG.isRouteDateAllowed(date, draft.booking_route)) {
         await sendMessage(from, isChinese
             ? "此日期不适用于您的预约类别，请重新选择。"
             : "That date is not available for your booking category. Please choose again.");
@@ -1528,7 +1522,7 @@ async function handleBookingPartySize(from, selectionId) {
     try {
         const draft = await getDraft(from);
 
-        if (!draft?.booking_date || !draft?.booking_time) {
+        if (!draft?.booking_date || !draft?.booking_time || draft.journey_step !== "dates" || draft.reserved_booking_id || !getBookingDates().includes(draft.booking_date)) {
             await sendMessage(
                 from,
                 isChinese
@@ -1559,7 +1553,7 @@ async function handleBookingPartySize(from, selectionId) {
                     : "There are no longer enough places at that time. Please choose another time."
             );
 
-            await sendAvailableTimes(from, draft.booking_date);
+            await offerBookingRestart(from);
             return;
         }
 
@@ -1592,7 +1586,7 @@ async function handleBookingTime(from, selectionId) {
 
     const draft = await getDraft(from);
 
-    if (!draft?.booking_date) {
+    if (!draft?.booking_date || draft.journey_step !== "dates" || draft.reserved_booking_id || !getBookingDates().includes(draft.booking_date)) {
         await sendMessage(
             from,
             isChinese
@@ -1631,10 +1625,7 @@ async function handleBookingTime(from, selectionId) {
                 : "That time is no longer available. Please choose another."
         );
 
-        await sendAvailableTimes(
-            from,
-            draft.booking_date
-        );
+        await offerBookingRestart(from);
 
         return;
     }
@@ -1811,8 +1802,8 @@ async function handleQuestionStaff(from) {
     await sendMessage(
         from,
         isChinese
-        ? "工作人员已收到通知，并会尽快回复您。\n\n我们的工作时间为新加坡时间中午12.00至下午17.30。"
-        : "A staff member has been notified and will get back to you as soon as possible.\n\nOur working hours are 12.00pm to 17.30pm Singapore Time."
+        ? "工作人员已收到通知，并会尽快回复您。\n\n我们的工作时间为新加坡时间12:00pm至5:30pm。"
+        : "A staff member has been notified and will get back to you as soon as possible.\n\nOur working hours are 12:00pm to 5:30pm Singapore Time."
     );
     
     await sendContactNavigation(from);
@@ -1968,8 +1959,8 @@ async function handleTextMessage(from, message) {
         await sendMessage(
             from,
             isChinese
-                ? "感谢您的问题。工作人员已收到通知，并会尽快回复您。\n\n我们的工作时间为新加坡时间中午12.00至下午17.30。"
-                : "Thanks for your question. A staff member has been notified and will get back to you as soon as possible.\n\nOur working hours are 12.00pm to 17.30pm Singapore Time."
+                ? "感谢您的问题。工作人员已收到通知，并会尽快回复您。\n\n我们的工作时间为新加坡时间12:00pm至5:30pm。"
+                : "Thanks for your question. A staff member has been notified and will get back to you as soon as possible.\n\nOur working hours are 12:00pm to 5:30pm Singapore Time."
         );
 
         await sendContactNavigation(from);
@@ -1985,8 +1976,8 @@ async function handleTextMessage(from, message) {
     await sendMessage(
         from,
         isChinese
-            ? "感谢您的留言。工作人员已收到通知，并会尽快回复您。\n\n我们的工作时间为新加坡时间中午12.00至下午17.30。"
-            : "Thanks for your message. A staff member has been notified and will get back to you as soon as possible.\n\nOur working hours are 12.00pm to 17.30pm Singapore Time."
+            ? "感谢您的留言。工作人员已收到通知，并会尽快回复您。\n\n我们的工作时间为新加坡时间12:00pm至5:30pm。"
+            : "Thanks for your message. A staff member has been notified and will get back to you as soon as possible.\n\nOur working hours are 12:00pm to 5:30pm Singapore Time."
     );
 
     await sendContactNavigation(from);
@@ -2004,7 +1995,6 @@ async function handleInteractiveMessage(from, message) {
                 ? "日期选择已失效，请重新选择。"
                 : "That date selection has expired. Please choose again.");
             await offerBookingRestart(from);
-            await sendAvailableDates(from);
             return;
         }
         await handleBookingDate(from, `BOOK_DATE_${date}`);
