@@ -51,5 +51,34 @@ test('durable inbox migration: deduplication, FIFO claims, checkpoints, restart 
         await assert.rejects(db.query('select * from bot_inbox'), /permission denied/);
         await assert.rejects(db.query('select * from claim_bot_event()'), /permission denied/);
         await db.exec('reset role');
+        // Supabase-specific extensions are represented by isolated SQL facades.
+        // Execute the generated cron SQL too, rather than only parsing its body.
+        await db.exec(`
+            create schema vault; create schema cron; create schema net;
+            create table vault.secrets(id uuid default gen_random_uuid(),name text,secret text);
+            create view vault.decrypted_secrets as select name,secret as decrypted_secret from vault.secrets;
+            create function vault.create_secret(value text,label text) returns uuid language sql as
+                'insert into vault.secrets(name,secret) values(label,value) returning id';
+            create function vault.update_secret(key uuid,value text) returns void language sql as
+                'update vault.secrets set secret=value where id=key';
+            create table cron.job(jobid bigint generated always as identity,jobname text,command text);
+            create function cron.schedule(label text,schedule text,statement text) returns bigint language sql as
+                'insert into cron.job(jobname,command) values(label,statement) returning jobid';
+            create function cron.unschedule(key bigint) returns boolean language sql as
+                'delete from cron.job where jobid=key returning true';
+            create function net.http_post(url text,headers jsonb,body jsonb,timeout_milliseconds integer) returns bigint
+                language sql as 'select 1::bigint';
+        `);
+        const recoverySql = fs.readFileSync(path.join(__dirname, '../migrations/010_serverless_recovery.sql'), 'utf8')
+            .replace(/create extension[^;]+;/g, '');
+        await db.exec(recoverySql);
+        const workerUrl = 'https://ixjmzksmazysazlyoxne.supabase.co/functions/v1/whatsapp-bot/work';
+        await db.query('select configure_bot_worker($1,$2)', [workerUrl, 'isolated-worker-secret-for-test']);
+        await db.query('select configure_bot_worker($1,$2)', [workerUrl, 'isolated-worker-secret-for-test']);
+        const schedules = (await db.query('select command from cron.job')).rows;
+        assert.equal(schedules.length, 1, 'preparation is idempotent');
+        await enqueue([event('cron')]);
+        assert.equal((await db.query(schedules[0].command)).rows.length, 1, 'generated cron SQL executes');
+        await assert.rejects(db.query('select configure_bot_worker($1,$2)', ['https://attacker.test/work', 'isolated-worker-secret-for-test']), /INVALID_WORKER_CONFIG/);
     } finally { await db.close(); }
 });

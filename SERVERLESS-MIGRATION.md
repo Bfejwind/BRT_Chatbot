@@ -2,6 +2,8 @@
 
 Target: Supabase project `ixjmzksmazysazlyoxne`, function `whatsapp-bot`.
 
+Current status: a disabled function was deployed through the existing browser session, importing the pinned bundle from commit `74c47c8b3f2c8b9e00481a34cc3cc487adf37dc1` on `codex/serverless-messages`. The gateway still requires authorization (unauthenticated health request returned 401). Production migrations, custom secrets, recovery scheduling and webhook cutover have not been applied. The live callback remains on Render. Supabase deployment/admin access is required to complete those steps.
+
 The function runs the booking, FAQ, language and staff-contact handlers directly. It does not proxy messages to Render. An authenticated webhook request is acknowledged only after its messages are committed to `bot_inbox`. Background processing is bounded to fit the free Edge Function execution window. A database cron job invokes recovery when pending work exists.
 
 The inbox serializes each customer's messages across instances. Conversation language and handover status persist in `bot_conversations`. Reply checkpoints prevent accepted sends from being replayed. Uncertain sends are marked `unknown` for review. Known rejections can retry, up to five inbox attempts. A database limiter coordinates the channel and recipient pacing across instances. A recipient's waiting time does not reserve the channel for other customers.
