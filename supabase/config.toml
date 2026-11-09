@@ -1,0 +1,9 @@
+project_id = "whatsapp-bot"
+
+[functions.whatsapp-bot]
+# WhatsApp uses the existing shared webhook secret rather than Supabase JWTs.
+verify_jwt = false
+entrypoint = "./functions/whatsapp-bot/index.ts"
+
+[edge_runtime]
+policy = "per_worker"

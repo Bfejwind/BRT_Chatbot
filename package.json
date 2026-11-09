@@ -17,5 +17,9 @@
     "express": "^5.2.1",
     "googleapis": "^178.0.0",
     "ws": "^8.21.3"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.3.14",
+    "esbuild": "^0.25.12"
   }
 }

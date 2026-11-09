@@ -56,6 +56,7 @@ const definitions = [
     ] }
 ];
 function reminderSequence(booking,format='full_v2') {
+    if(format==='full_v7')return require('./reminderRevision7').sequence(booking);
     if(format==='full_v6')return require('./reminderRevision6').sequence(booking);
     if(format==='full_v5')return require('./reminderRevision5').sequence(booking);
     if(format==='full_v4')return require('./reminderRevision4').sequence(booking);
@@ -78,6 +79,7 @@ function reminderSequence(booking,format='full_v2') {
     }));
 }
 function getDefinitions(format='full_v2'){
+    if(format==='full_v7')return require('./reminderRevision7').definitions;
     if(format==='full_v6')return require('./reminderRevision6').definitions;
     if(format==='full_v5')return require('./reminderRevision5').definitions;
     if(format==='full_v4')return require('./reminderRevision4').definitions;

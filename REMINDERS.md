@@ -138,3 +138,9 @@ an authorized deployment, use BOOKING_REMINDER_FORMAT=full_v4. Existing v3
 checkpointed jobs retain v3. No live provider or production format was changed.
 
 November 3 update: English and Chinese reminder definitions recommend arriving 20 minutes early. Updated hosted WhatsApp templates require provider submission and approval before the new wording appears in live reminders.
+
+## English arrival revision v7 (9 November 2026)
+
+The English timeline is replaced with: “🕰️ Please arrive 10–20 minutes before your session to allow time for registration and use of the restroom.” Chinese uses: “🕰️ 请于茶荟开始前10–20分钟抵达，以便签到及使用洗手间。” Both duplicate 20-minute arrival sentences are removed. Directions retain their existing approved template.
+
+Implementation: `reminderRevision7.js`; bilingual preview: `templates/drafts/reminder-preview-v7.md`. Both v7 language templates have been submitted for approval. Activate `BOOKING_REMINDER_FORMAT=full_v7` only after both are approved and v7 support is deployed. Older partly sent jobs keep their original revision and parameter counts. The historical text in `reminderTemplates.js` belongs to approved v2 templates and is retained for those jobs.

@@ -1,0 +1,18 @@
+{
+  "name": "tea_session_reminder_full_en_v7",
+  "language": "en",
+  "category": "UTILITY",
+  "components": [
+    {
+      "type": "BODY",
+      "text": "Dear Guests,\n\nAuthentic Tea Essence Museum•Guanyiyangxing Tea Space welcomes you to our tea space tomorrow!\n\n🕰️ Please arrive 10–20 minutes before your session to allow time for registration and use of the restroom.\n\nPlease note: To give everyone the best experience, we may not be able to admit late arrivals once the session has begun. Thank you for your understanding.\n\nGentle reminders: \n👕 Wear loose, comfortable tops and long pants suitable for sitting. Please wear socks for the session.\n \n🥗 Avoid onion, ginger, garlic, curry, other spicy foods and alcohol. Please avoid eating for 1 hour before the session. \n\n👚 You may perspire during the tea session. Bring a change of clothes if needed. \n\n🌸 Please avoid wearing perfume. \n\nSee you tomorrow {{1}}! Have a lovely day ahead.",
+      "example": {
+        "body_text": [
+          [
+            "afternoon"
+          ]
+        ]
+      }
+    }
+  ]
+}
