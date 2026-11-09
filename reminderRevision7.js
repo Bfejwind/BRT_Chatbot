@@ -8,12 +8,21 @@ english.components[0].text = english.components[0].text
     .replace('Please arrive 20 minutes early.\n\n', '')
     .replace('{{6}}', '{{1}}');
 english.components[0].example.body_text = [['afternoon']];
+const chinese = definitions[1];
+chinese.name = 'tea_session_reminder_full_zh_v7';
+chinese.components[0].text = chinese.components[0].text
+    .replace(/🕰️[^]*?(?=注意：)/, '🕰️ 请于茶荟开始前10–20分钟抵达，以便签到及使用洗手间。\n\n')
+    .replace('请提前20分钟抵达。\n\n', '')
+    .replace('{{6}}', '{{1}}');
+chinese.components[0].example.body_text = [['下午']];
 
 function sequence(booking) {
     const payloads = previous.sequence(booking);
-    const period = payloads[0].template.components[0].parameters.at(-1);
-    payloads[0].template.name = english.name;
-    payloads[0].template.components[0].parameters = [period];
+    for (let i = 0; i < 2; i++) {
+        const period = payloads[i].template.components[0].parameters.at(-1);
+        payloads[i].template.name = definitions[i].name;
+        payloads[i].template.components[0].parameters = [period];
+    }
     return payloads;
 }
 function preview(booking) {
