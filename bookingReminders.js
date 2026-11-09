@@ -1,4 +1,4 @@
-const isFullFormat = format => ['full_v2','full_v3','full_v4','full_v5'].includes(format);
+const isFullFormat = format => ['full_v2','full_v3','full_v4','full_v5','full_v6','full_v7'].includes(format);
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function singaporeDate(date) {
